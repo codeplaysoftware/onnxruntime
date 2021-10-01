@@ -1317,3 +1317,64 @@ if (onnxruntime_USE_STVM)
 
   install(DIRECTORY ${PROJECT_SOURCE_DIR}/../include/onnxruntime/core/providers/stvm  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/onnxruntime/core/providers)
 endif()
+
+if (onnxruntime_USE_SYCL)
+  add_definitions("-DONNX_ML=1")  #Mandatory, otherwise : fatal error: onnx/onnx.pb.h: No such file or directory
+  add_definitions("-DONNX_NAMESPACE=onnx")
+  add_definitions("-DUSE_SYCL=1")
+
+  file(GLOB_RECURSE onnxruntime_providers_sycl_src CONFIGURE_DEPENDS
+    "${ONNXRUNTIME_ROOT}/core/providers/sycl/*.h"
+    "${ONNXRUNTIME_ROOT}/core/providers/sycl/*.cc"
+  )
+
+  find_library(SYCLBLAS_LIBRARY
+  NAMES sycl_blas libsycl_blas
+  PATH_SUFFIXES buildCpp
+  HINTS ${onnxruntime_SYCLBLAS_HOME}
+  DOC "The SYCL-BLAS Shared Library for SYCL EP"
+  )
+
+  find_library(SYCLDNN_LIBRARY
+    NAMES sycldnn libsycldnn
+    PATH_SUFFIXES build
+    HINTS ${onnxruntime_SYCLDNN_HOME}
+    DOC "The SYCL-DNN Shared Library for SYCL EP"
+  )
+
+  onnxruntime_add_static_library(onnxruntime_providers_sycl ${onnxruntime_providers_sycl_src})
+  onnxruntime_add_include_to_target(onnxruntime_providers_sycl onnxruntime_common onnxruntime_framework onnx flatbuffers)
+
+  set_target_properties(onnxruntime_providers_sycl PROPERTIES CXX_STANDARD 17)
+  set_target_properties(onnxruntime_providers_sycl PROPERTIES CXX_STANDARD_REQUIRED ON)
+  set_target_properties(onnxruntime_providers_sycl PROPERTIES FOLDER "ONNXRuntime")
+  set_target_properties(onnxruntime_providers_sycl PROPERTIES LINKER_LANGUAGE CXX)
+  add_dependencies(onnxruntime_providers_sycl ${onnxruntime_EXTERNAL_DEPENDENCIES})
+
+  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} ${CMAKE_CURRENT_BINARY_DIR})
+  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLBLAS_HOME}/src ${onnxruntime_SYCLBLAS_HOME}/include ${onnxruntime_SYCLBLAS_HOME}/external/computecpp-sdk/include) 
+  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLDNN_HOME}/src ${onnxruntime_SYCLDNN_HOME}/include ${onnxruntime_SYCLDNN_HOME}/build )
+
+  if(is_dpcpp)
+    message("++++++++++++++++++++++++++ SYCL COMPILER : DPCPP +++++++++++++++++++++++++++++")
+
+    target_compile_options(onnxruntime_providers_sycl PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:SHELL: -Wno-unused-variable -Wno-unused-parameter -Wno-error=unused-variable -Wno-error=unused-parameter -Wno-error=unknown-pragmas >")
+    target_compile_options(onnxruntime_providers_sycl PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:SHELL: -Wno-error=ignored-qualifiers -Wno-error=deprecated-declarations -Wno-error=unused-local-typedef -Wno-error=unused-local-typedef>")  
+
+    set_target_properties(onnxruntime_providers_sycl PROPERTIES INTERFACE_LINK_LIBRARIES DPCPP::DPCPP )
+    set_target_properties(onnxruntime_providers_sycl PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${SYCL_INCLUDE_DIRS}")
+
+    target_link_libraries(onnxruntime_providers_sycl PRIVATE DPCPP::DPCPP ${SYCLBLAS_LIBRARY} ${SYCLDNN_LIBRARY} )
+
+  else()
+  message("++++++++++++++++++++++++++ SYCL COMPILER : COMPUTECPP +++++++++++++++++++++++++++++")
+
+    target_compile_options(onnxruntime_providers_sycl PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:SHELL: -std=c++17 -Wno-error=unused-local-typedefs -Wno-error=unused-parameter -Wno-error=ignored-qualifiers -Wno-error=unknown-pragmas >")
+
+    set_target_properties(onnxruntime_providers_sycl PROPERTIES INTERFACE_LINK_LIBRARIES ComputeCpp::ComputeCpp )
+    set_target_properties(onnxruntime_providers_sycl PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${COMPUTECPP_SDK_INCLUDE};${SYCL_INCLUDE_DIRS}")
+
+    target_link_libraries(onnxruntime_providers_sycl PRIVATE ComputeCpp::ComputeCpp ${SYCLBLAS_LIBRARY} ${SYCLDNN_LIBRARY} )
+
+  endif()
+endif()

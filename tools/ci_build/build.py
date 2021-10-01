@@ -224,6 +224,15 @@ def parse_arguments():
     parser.add_argument(
         "--enable_cuda_line_info", action='store_true', help="Enable CUDA line info.")
 
+    # SYCL Related
+    parser.add_argument(
+        "--use_sycl", action='store_true',
+        help="Build with SYCL Support")
+    parser.add_argument(
+        "--syclblas_home", help="Path to SYCLBLAS installation/source dir")
+    parser.add_argument(
+        "--sycldnn_home", help="Path to SYCLDNN installation/source dir")
+
     # Python bindings
     parser.add_argument(
         "--enable_pybind", action='store_true', help="Enable Python Bindings.")
@@ -728,7 +737,8 @@ def add_cmake_define_without_override(cmake_extra_defines, key, value):
 
 
 def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home, rocm_home,
-                        mpi_home, nccl_home, tensorrt_home, migraphx_home, acl_home, acl_libs, armnn_home, armnn_libs,
+                        mpi_home, nccl_home, tensorrt_home, migraphx_home, acl_home, acl_libs,
+                        armnn_home, armnn_libs, syclblas_home, sycldnn_home,
                         path_to_protoc_exe, configs, cmake_extra_defines, args, cmake_extra_args):
     log.info("Generating CMake build tree")
     cmake_dir = os.path.join(source_dir, "cmake")
@@ -945,6 +955,12 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
 
     if args.nnapi_min_api:
         cmake_args += ["-Donnxruntime_NNAPI_MIN_API=" + str(args.nnapi_min_api)]
+
+    if syclblas_home and os.path.exists(syclblas_home):
+        cmake_args += ["-Donnxruntime_SYCLBLAS_HOME=" + syclblas_home]
+
+    if sycldnn_home and os.path.exists(sycldnn_home):
+        cmake_args += ["-Donnxruntime_SYCLDNN_HOME=" + sycldnn_home]
 
     if args.android:
         if not args.android_ndk_path:
@@ -1177,7 +1193,7 @@ def build_targets(args, cmake_path, build_dir, configs, num_parallel_jobs, targe
                 # CMake will generate correct build tool args for Xcode
                 cmd_args += ["--parallel", str(num_parallel_jobs)]
             else:
-                build_tool_args += ["-j{}".format(num_parallel_jobs)]
+                build_tool_args += ["-j{}".format(8)]
 
         if build_tool_args:
             cmd_args += ["--"]
@@ -1763,6 +1779,8 @@ def build_python_wheel(
             args.append('--use_armnn')
         elif use_dml:
             args.append('--wheel_name_suffix=directml')
+        elif use_sycl:
+            args.append('--use_sycl')
 
         run_subprocess(args, cwd=cwd)
 
@@ -2121,6 +2139,10 @@ def main():
     # if using rocm, setup rocm paths
     rocm_home = setup_rocm_build(args, configs)
 
+    # if using sycl, setup syclblas & sycldnn paths
+    syclblas_home = args.syclblas_home
+    sycldnn_home = args.sycldnn_home
+
     if args.update or args.build:
         for config in configs:
             os.makedirs(get_config_build_dir(build_dir, config), exist_ok=True)
@@ -2300,7 +2322,8 @@ def main():
         generate_build_tree(
             cmake_path, source_dir, build_dir, cuda_home, cudnn_home, rocm_home, mpi_home, nccl_home,
             tensorrt_home, migraphx_home, acl_home, acl_libs, armnn_home, armnn_libs,
-            path_to_protoc_exe, configs, cmake_extra_defines, args, cmake_extra_args)
+            syclblas_home, sycldnn_home, path_to_protoc_exe, configs, cmake_extra_defines, args,
+            cmake_extra_args)
 
     if args.clean:
         clean_targets(cmake_path, build_dir, configs)
@@ -2350,6 +2373,7 @@ def main():
                 args.use_acl,
                 args.use_armnn,
                 args.use_dml,
+                args.use_sycl,
                 args.wheel_name_suffix,
                 args.enable_training,
                 nightly_build=nightly_build,
