@@ -124,6 +124,9 @@ class QLinearConv(QuantOperatorBase):
         if not data_found or quantized_input_names is None:
             return super().quantize()
 
+        if not data_found or quantized_input_names is None:
+            return super().quantize()
+
         quantized_bias_name = ""
         bias_present = False
         if len(node.input) == 3:

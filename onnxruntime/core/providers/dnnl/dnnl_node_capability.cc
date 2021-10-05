@@ -35,6 +35,10 @@ bool DnnlDefaultNodeCapability::IsTypeSupported(const Node* node) const {
       if (inputType == node_datatype) {
         return true;
       }
+      if (node_inputs[0]->Type()->compare(inputType) == 0) {
+        return true;
+      }
+
     }
   }
   return false;
@@ -220,6 +224,7 @@ bool DnnlSoftmaxNodeCapability::Supported(const Node* node, const GraphViewer& g
   ORT_UNUSED_PARAMETER(graph_viewer);
   if (!IsTypeSupported(node)) return false;
   if (!IsAttributeSupported(node)) return false;
+  if (!IsDimensionSupported(node)) return false;
   return true;
 }
 

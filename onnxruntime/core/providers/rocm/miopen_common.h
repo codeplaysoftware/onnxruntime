@@ -11,6 +11,8 @@
 
 const double MIOPEN_BN_MIN_EPSILON = 1e-5;
 
+const double MIOPEN_BN_MIN_EPSILON = 1e-5;
+
 namespace onnxruntime {
 namespace rocm {
 

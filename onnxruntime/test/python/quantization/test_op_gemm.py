@@ -210,5 +210,16 @@ class TestOpGEMM(unittest.TestCase):
         self.dynamic_attention_quant_test(model_fp32_path, model_int8_path, False, False)
 
 
+    def test_quantize_attention(self):
+        np.random.seed(1)
+        model_fp32_path = 'attention_fp32.onnx'
+        model_int8_path = 'attention_fp32.quant.onnx'
+        self.construct_model_attention_and_matmul(model_fp32_path)
+
+        self.dynamic_attention_quant_test(model_fp32_path, model_int8_path, True, True)
+        self.dynamic_attention_quant_test(model_fp32_path, model_int8_path, True, False)
+        self.dynamic_attention_quant_test(model_fp32_path, model_int8_path, False, True)
+        self.dynamic_attention_quant_test(model_fp32_path, model_int8_path, False, False)
+
 if __name__ == '__main__':
     unittest.main()

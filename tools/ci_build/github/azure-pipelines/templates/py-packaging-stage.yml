@@ -292,6 +292,7 @@ stages:
     - job: ROCm_build_environment
       displayName: 'Construct ROCm wheels environment'
       timeoutInMinutes: 180
+      displayName: 'Build ROCm wheels (inside container)'
       workspace:
         clean: all
       pool: AMD-GPU

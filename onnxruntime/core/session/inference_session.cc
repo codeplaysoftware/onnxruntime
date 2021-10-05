@@ -62,6 +62,10 @@
 #include "core/session/custom_ops.h"
 #endif
 
+#if defined(ORT_ENABLE_ORT_FORMAT_RUNTIME_GRAPH_OPTIMIZATION)
+#include "core/optimizer/ort_format_runtime_optimization/utils.h"
+#endif
+
 using namespace ONNX_NAMESPACE;
 using namespace onnxruntime::common;
 

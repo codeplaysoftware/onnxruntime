@@ -42,6 +42,21 @@ def _torch_tensor_from_dl_pack(dlpack, ortvalue):
     torch_tensor = from_dlpack(dlpack)
     return torch_tensor.to(torch.bool) if ortvalue.data_type() == 'tensor(bool)' else torch_tensor
 
+def _ortvalue_from_torch_tensor(torch_tensor):
+    # TODO: Current DLPack doesn't support bool and PyTorch disables converting bool tensor to DLPack in recent commit.
+    # https://github.com/pytorch/pytorch/blob/7e7be526c9d9179f35084e9cca5b5c5ad5172100/aten/src/ATen/DLConvertor.cpp#L41
+    # We need to convert bool tensor to unit8 tensor to workaround this.
+    # DLPack is discussing how to support bool type, we can remove this workaround once both DLPack
+    # and PyTorch support bool type.
+    is_bool_tensor = torch_tensor.dtype == torch.bool
+    if is_bool_tensor and LooseVersion(torch.__version__) >= LooseVersion('1.10.0'):
+        torch_tensor = torch_tensor.to(torch.uint8)
+    return C.OrtValue.from_dlpack(to_dlpack(torch_tensor), is_bool_tensor)
+
+
+def _torch_tensor_from_dl_pack(dlpack, ortvalue, device):
+    torch_tensor = from_dlpack(dlpack) if device.type != 'ort' else C.ort_from_dlpack(dlpack)
+    return torch_tensor.to(torch.bool) if ortvalue.data_type() == 'tensor(bool)' else torch_tensor
 
 def _ortvalue_to_torch_tensor(ortvalue, device):
     if device.type == 'ort':
