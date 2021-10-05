@@ -136,6 +136,33 @@ namespace Microsoft.ML.OnnxRuntime
         }
 
         /// <summary>
+        /// A helper method to construct a SessionOptions object for TensorRT execution provider.
+        /// Use only if CUDA/TensorRT are installed and you have the onnxruntime package specific to this Execution Provider.
+        /// </summary>
+        /// <param name="trtProviderOptions">TensorRT EP provider options</param>
+        /// <returns>A SessionsOptions() object configured for execution on provider options</returns>
+        public static SessionOptions MakeSessionOptionWithTensorrtProvider(OrtTensorRTProviderOptions trtProviderOptions)
+        {
+            CheckTensorrtExecutionProviderDLLs();
+            SessionOptions options = new SessionOptions();
+            try
+            {
+                // Make sure that CUDA EP uses the same device id as TensorRT EP.
+                int deviceId = trtProviderOptions.GetDeviceId() ;
+
+                NativeApiStatus.VerifySuccess(NativeMethods.SessionOptionsAppendExecutionProvider_TensorRT(options.Handle, trtProviderOptions.Handle));
+                NativeApiStatus.VerifySuccess(NativeMethods.OrtSessionOptionsAppendExecutionProvider_CUDA(options.Handle, deviceId));
+                NativeApiStatus.VerifySuccess(NativeMethods.OrtSessionOptionsAppendExecutionProvider_CPU(options.Handle, 1));
+                return options;
+            }
+            catch (Exception e)
+            {
+                options.Dispose();
+                throw e;
+            }
+        }
+
+        /// <summary>
         /// A helper method to construct a SessionOptions object for Nuphar execution.
         /// Use only if you have the onnxruntime package specific to this Execution Provider.
         /// </summary>
@@ -169,7 +196,7 @@ namespace Microsoft.ML.OnnxRuntime
         /// </summary>
         /// <param name="deviceId">Device Id</param>
         /// <returns>A SessionsOptions() object configured for execution on deviceId</returns>
-        public static SessionOptions MakeSessionOptionWithRocmProvider(int deviceId = 0)
+        public static SessionOptions MakeSessionOptionWithRocmProvider(int deviceId = 0, UIntPtr gpuMemLimit = default)
         {
             SessionOptions options = new SessionOptions();
             options.AppendExecutionProvider_ROCM(deviceId);

@@ -40,4 +40,7 @@ constexpr const char* kStvmExecutionProvider = "StvmExecutionProvider";
 constexpr const char* kExecutionProviderSharedLibraryPath = "shared_lib_path";
 constexpr const char* kExecutionProviderSharedLibraryEntry = "provider_factory_entry_point";
 
+constexpr const char* kExecutionProviderSharedLibraryPath = "shared_lib_path";
+constexpr const char* kExecutionProviderSharedLibraryEntry = "provider_factory_entry_point";
+
 }  // namespace onnxruntime

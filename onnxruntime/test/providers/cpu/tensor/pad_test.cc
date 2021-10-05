@@ -151,6 +151,14 @@ void RunAllOpsetAllDomainPadTests<>(
                                    output,
                                    mode, expect, error_msg, excluded_provider_types);
 
+  RunOnnxOpsetTypedTest<float, 13>(input_dims,
+                                   input,
+                                   pads,
+                                   value,
+                                   output_dims,
+                                   output,
+                                   mode, expect, error_msg);
+
 #ifndef DISABLE_CONTRIB_OPS
 
   // MSFT domain opset-1 (contrib op)
@@ -795,6 +803,16 @@ TYPED_TEST(PadOpTest, Pad_Reflect_DimWithZeroInput) {
                                   "reflect",
                                   OpTester::ExpectResult::kExpectFailure,
                                   "Cannot use 'reflect' mode to pad dimension with a value of 0. Input shape:{0,2,1}", {kTensorrtExecutionProvider});
+}
+
+TEST(PadOpTest, BoolType) {
+  OpTester test("Pad", 13);
+  test.AddAttribute("mode", "constant");
+  test.AddInput<bool>("data", {3, 2}, {true, false, true, false, true, false});
+  test.AddInput<int64_t>("pads", {4}, {0, 2, 0, 0});
+  test.AddInput<bool>("value", {1}, {true});
+  test.AddOutput<bool>("output", {3, 4}, {true, true, true, false, true, true, true, false, true, true, true, false});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
 
 TEST(PadOpTest, BoolType) {
