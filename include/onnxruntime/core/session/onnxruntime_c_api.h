@@ -515,6 +515,14 @@ typedef struct OrtOpenVINOProviderOptions {
   void* context;
 } OrtOpenVINOProviderOptions;
 
+/** \brief SYCL Provider Options
+*
+* \see OrtApi::SessionOptionsAppendExecutionProvider_SYCL
+*/
+typedef struct OrtSYCLProviderOptions {
+  int device_selector;  //Mapped to SYCL device selector
+} OrtSYCLProviderOptions;
+
 struct OrtApi;
 typedef struct OrtApi OrtApi;
 

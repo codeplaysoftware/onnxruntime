@@ -543,6 +543,11 @@ inline SessionOptions& SessionOptions::AppendExecutionProvider_OpenVINO(const Or
   return *this;
 }
 
+inline SessionOptions& SessionOptions::AppendExecutionProvider_SYCL(const OrtSYCLProviderOptions& provider_options) {
+  ThrowOnError(GetApi().SessionOptionsAppendExecutionProvider_SYCL(p_, &provider_options));
+  return *this;
+}
+
 inline Session::Session(Env& env, const ORTCHAR_T* model_path, const SessionOptions& options) {
   ThrowOnError(GetApi().CreateSession(env, model_path, options, &p_));
 }
