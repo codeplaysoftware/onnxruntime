@@ -88,6 +88,15 @@ TODO: When the NNAPI or CoreML EPs are setup to use the provider bridge the sour
 
 // EPs in the first case
 
+#ifndef USE_SYCL
+ORT_API_STATUS_IMPL(OrtApis::SessionOptionsAppendExecutionProvider_SYCL,
+                    _In_ OrtSessionOptions* options, _In_ const OrtSYCLProviderOptions* sycl_options) {
+  ORT_UNUSED_PARAMETER(options);
+  ORT_UNUSED_PARAMETER(sycl_options);
+  return CreateNotEnabledStatus("SYCL");
+}
+#endif
+
 // EPs in the second case
 #if defined(ORT_MINIMAL_BUILD)
 ORT_API_STATUS_IMPL(OrtApis::SessionOptionsAppendExecutionProvider_CUDA,
