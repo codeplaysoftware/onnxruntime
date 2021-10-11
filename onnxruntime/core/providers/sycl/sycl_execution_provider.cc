@@ -3,6 +3,7 @@
 #include "core/providers/sycl/sycl_execution_provider.h"
 #include "core/providers/sycl/sycl_execution_provider_info.h"
 #include "core/providers/sycl/sycl_allocator.h"
+#include "core/providers/sycl/sycl_data_transfer.h"
 #include "core/graph/constants.h"
 #include <CL/sycl.hpp>
 
@@ -37,7 +38,7 @@ void SYCLExecutionProvider::RegisterAllocator(std::shared_ptr<AllocatorManager> 
   TryInsertAllocator(sycl_alloc);
 }
 
-// CreateSYCLAllocator
+// Create Allocator
 AllocatorPtr SYCLExecutionProvider::CreateSYCLAllocator(std::shared_ptr<cl::sycl::queue> q) {
   AllocatorCreationInfo default_memory_info(
       [&q](OrtDevice::DeviceId id) {
@@ -53,9 +54,14 @@ AllocatorPtr SYCLExecutionProvider::CreateSYCLAllocator(std::shared_ptr<cl::sycl
   return CreateAllocator(default_memory_info);
 }
 
-// GetAllocator
+// Get Allocator
 AllocatorPtr SYCLExecutionProvider::GetAllocator(int id, OrtMemType mem_type) const {
   return IExecutionProvider::GetAllocator(id, mem_type);
+}
+
+// Get DataTransfer
+std::unique_ptr<IDataTransfer> SYCLExecutionProvider::GetDataTransfer() const {
+  return std::make_unique<SYCLDataTransfer>(queue_);
 }
 
 }  // namespace onnxruntime
