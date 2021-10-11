@@ -4,8 +4,21 @@
 #include "core/providers/sycl/sycl_execution_provider_info.h"
 #include "core/providers/sycl/sycl_allocator.h"
 #include "core/providers/sycl/sycl_data_transfer.h"
+#include "core/providers/sycl/sycl_fwd.h"
+
+#include "core/framework/kernel_registry.h"
 #include "core/graph/constants.h"
+
 #include <CL/sycl.hpp>
+
+using namespace onnxruntime::common;
+
+namespace {
+struct KernelRegistryAndStatus {
+  std::shared_ptr<onnxruntime::KernelRegistry> kernel_registry = std::make_shared<onnxruntime::KernelRegistry>();
+  Status st;
+};
+}  // namespace
 
 namespace onnxruntime {
 
@@ -62,6 +75,46 @@ AllocatorPtr SYCLExecutionProvider::GetAllocator(int id, OrtMemType mem_type) co
 // Get DataTransfer
 std::unique_ptr<IDataTransfer> SYCLExecutionProvider::GetDataTransfer() const {
   return std::make_unique<SYCLDataTransfer>(queue_);
+}
+
+namespace sycl {
+
+template <>
+KernelCreateInfo BuildKernelCreateInfo<void>() {
+  KernelCreateInfo info;
+  return info;
+}
+
+static Status RegisterSyclKernels(KernelRegistry& kernel_registry) {
+  static const BuildKernelCreateInfoFn function_table[] = {
+      BuildKernelCreateInfo<void>,  //default entry to avoid the list become empty after ops-reducing
+
+  };
+
+  for (auto& function_table_entry : function_table) {
+    KernelCreateInfo info = function_table_entry();
+    if (info.kernel_def != nullptr) {  // filter disabled entries where type is void
+      ORT_RETURN_IF_ERROR(kernel_registry.Register(std::move(info)));
+    }
+  }
+
+  return Status::OK();
+}
+
+KernelRegistryAndStatus GetSyclKernelRegistry() {
+  KernelRegistryAndStatus ret;
+  ret.st = RegisterSyclKernels(*ret.kernel_registry);
+  return ret;
+}
+
+}  // namespace sycl
+
+std::shared_ptr<KernelRegistry> SYCLExecutionProvider::GetKernelRegistry() const {
+  static KernelRegistryAndStatus k = onnxruntime::sycl::GetSyclKernelRegistry();
+
+  //Throw if the registry failed to initialize
+  ORT_THROW_IF_ERROR(k.st);
+  return k.kernel_registry;
 }
 
 }  // namespace onnxruntime
