@@ -28,6 +28,8 @@ class SYCLExecutionProvider : public IExecutionProvider {
 
   std::unique_ptr<onnxruntime::IDataTransfer> GetDataTransfer() const override;
 
+  std::shared_ptr<KernelRegistry> GetKernelRegistry() const override;
+
  private:
   SYCLExecutionProviderInfo info_;
   std::shared_ptr<cl::sycl::queue> queue_;
