@@ -26,6 +26,8 @@ class SYCLExecutionProvider : public IExecutionProvider {
 
   static AllocatorPtr CreateSYCLAllocator(std::shared_ptr<cl::sycl::queue> q);
 
+  std::unique_ptr<onnxruntime::IDataTransfer> GetDataTransfer() const override;
+
  private:
   SYCLExecutionProviderInfo info_;
   std::shared_ptr<cl::sycl::queue> queue_;
