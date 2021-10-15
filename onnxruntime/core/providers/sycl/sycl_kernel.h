@@ -41,6 +41,8 @@ class SyclKernel : public OpKernel {
 
   inline cl::sycl::queue* Queue() const { return provider_->GetQueue(); };
 
+  inline std::unique_ptr<onnxruntime::IDataTransfer> GetDataTransfer() const { return provider_->GetDataTransfer(); };
+
   inline int GetDeviceId() const {
     return provider_->GetDeviceId();
   }
