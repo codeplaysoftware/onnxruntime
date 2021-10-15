@@ -22,22 +22,15 @@ struct KernelRegistryAndStatus {
 
 namespace onnxruntime {
 
-SYCLExecutionProvider::SYCLExecutionProvider() : IExecutionProvider{onnxruntime::kSyclExecutionProvider},
-                                                 queue_{std::make_shared<cl::sycl::queue>(cl::sycl::default_selector{})} {
+SYCLExecutionProvider::SYCLExecutionProvider() : IExecutionProvider{onnxruntime::kSyclExecutionProvider}, queue_{std::make_shared<cl::sycl::queue>(cl::sycl::default_selector{})} {
 }
 
 SYCLExecutionProvider::SYCLExecutionProvider(const SYCLExecutionProviderInfo& info)
-    : IExecutionProvider{onnxruntime::kSyclExecutionProvider},
-      info_{info},
-      queue_{info.device_selector ? std::make_shared<cl::sycl::queue>(cl::sycl::gpu_selector{}) : std::make_shared<cl::sycl::queue>(cl::sycl::cpu_selector{})} {
+    : IExecutionProvider{onnxruntime::kSyclExecutionProvider}, info_{info}, queue_{info.device_selector ? std::make_shared<cl::sycl::queue>(cl::sycl::gpu_selector{}) : std::make_shared<cl::sycl::queue>(cl::sycl::cpu_selector{})} {
   LOGS_DEFAULT(INFO) << "SYCL EP instantiated using selector : \n\tdevice's name : " << queue_->get_device().get_info<cl::sycl::info::device::name>() << "\n\tdevice's vendor : " << queue_->get_device().get_info<cl::sycl::info::device::vendor>();
 }
 
 SYCLExecutionProvider::~SYCLExecutionProvider() {
-}
-
-cl::sycl::queue* SYCLExecutionProvider::GetQueue() const {
-  return (queue_.get());
 }
 
 // Register Allocator
@@ -77,7 +70,21 @@ std::unique_ptr<IDataTransfer> SYCLExecutionProvider::GetDataTransfer() const {
   return std::make_unique<SYCLDataTransfer>(queue_);
 }
 
+cl::sycl::queue* SYCLExecutionProvider::GetQueue() const {
+  return (queue_.get());
+}
+
 namespace sycl {
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 7, 12, float, Add);
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, MatMul);
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Gemm);
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Relu);
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, MaxPool);
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Conv);
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, AveragePool);
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Softmax);
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Flatten);
+class ONNX_OPERATOR_VERSIONED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, Dropout);
 
 template <>
 KernelCreateInfo BuildKernelCreateInfo<void>() {
@@ -88,6 +95,16 @@ KernelCreateInfo BuildKernelCreateInfo<void>() {
 static Status RegisterSyclKernels(KernelRegistry& kernel_registry) {
   static const BuildKernelCreateInfoFn function_table[] = {
       BuildKernelCreateInfo<void>,  //default entry to avoid the list become empty after ops-reducing
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 7, 12, float, Add)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, MatMul)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Gemm)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Relu)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, MaxPool)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Conv)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, AveragePool)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Softmax)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Flatten)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, Dropout)>,
 
   };
 

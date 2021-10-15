@@ -122,7 +122,7 @@ void Gemm<T>::ComputeGemm(CBLAS_TRANSPOSE trans_a, CBLAS_TRANSPOSE trans_b,
     return;
 
   // Broadcast the bias as needed if bias is given
-  GemmBroadcastBias(M, N, beta, c_data, c_shape, y_data);
+  //GemmBroadcastBias(M, N, beta, c_data, c_shape, y_data);
 
   math::Gemm<T>(trans_a, trans_b,
                 M, N, K,
@@ -280,7 +280,7 @@ Status Gemm<float>::Compute(OpKernelContext* context) const {
     ComputeGemm(trans_A_, trans_B_, M, N, K, alpha_, A->Data<float>(), B->Data<float>(), beta_,
                 c_data, c_shape, y_data, thread_pool);
   } else {
-    GemmBroadcastBias(M, N, beta_, c_data, c_shape, y_data);
+    //GemmBroadcastBias(M, N, beta_, c_data, c_shape, y_data);
     MlasGemm(
         trans_A_,
         static_cast<size_t>(M),
