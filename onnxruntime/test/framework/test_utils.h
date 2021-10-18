@@ -27,6 +27,7 @@
 #ifdef USE_SYCL
 #include "core/providers/sycl/sycl_execution_provider.h"
 #endif
+
 namespace onnxruntime {
 class Graph;
 
@@ -44,6 +45,10 @@ IExecutionProvider* TestRknpuExecutionProvider();
 
 #ifdef USE_COREML
 IExecutionProvider* TestCoreMLExecutionProvider(uint32_t coreml_flags);
+#endif
+
+#ifdef USE_SYCL
+IExecutionProvider* TestSyclExecutionProvider();
 #endif
 
 template <typename T>
@@ -101,7 +106,7 @@ void SparseIndicesChecker(const ONNX_NAMESPACE::TensorProto& indices_proto, gsl:
 
 #if !defined(DISABLE_SPARSE_TENSORS)
 void SparseIndicesChecker(const ONNX_NAMESPACE::TensorProto& indices_proto, gsl::span<const int64_t> expected_indicies);
-#endif // DISABLE_SPARSE_TENSORS
+#endif  // DISABLE_SPARSE_TENSORS
 
 }  // namespace test
 }  // namespace onnxruntime
