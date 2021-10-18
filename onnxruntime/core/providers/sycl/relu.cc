@@ -15,12 +15,23 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering VERSIONNED TYPED Kernels
-#define REGISTER_RELU_KERNEL_TYPED(T)                             \
+#define REGISTER_VERSIONED_RELU_KERNEL_TYPED(T, start, end)       \
   ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
       Relu,                                                       \
       kOnnxDomain,                                                \
-      1,                                                          \
-      12,                                                         \
+      start,                                                      \
+      end,                                                        \
+      T,                                                          \
+      kSyclExecutionProvider,                                     \
+      KernelDefBuilder()                                          \
+          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+      Relu<T>);
+
+#define REGISTER_RELU_KERNEL_TYPED(T, start)                      \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
+      Relu,                                                       \
+      kOnnxDomain,                                                \
+      start,                                                      \
       T,                                                          \
       kSyclExecutionProvider,                                     \
       KernelDefBuilder()                                          \
@@ -69,7 +80,9 @@ Status Relu<T>::ComputeInternal(OpKernelContext* context) const {
 }
 
 // REGISTER KERNEL
-REGISTER_RELU_KERNEL_TYPED(float)
+REGISTER_VERSIONED_RELU_KERNEL_TYPED(float, 6, 12)
+REGISTER_VERSIONED_RELU_KERNEL_TYPED(float, 13, 13)
+REGISTER_RELU_KERNEL_TYPED(float, 14)
 
 }  // namespace sycl
 }  // namespace onnxruntime

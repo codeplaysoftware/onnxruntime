@@ -15,5 +15,6 @@ class Relu final : public SyclKernel {
 
   Status ComputeInternal(OpKernelContext* context) const override;
 };
+
 }  // namespace sycl
 }  // namespace onnxruntime

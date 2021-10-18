@@ -19,12 +19,23 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering Kernel
-#define REGISTER_CONV_KERNEL_TYPED(T)                             \
+#define REGISTER_VERSIONED_CONV_KERNEL_TYPED(T, start, end)       \
   ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
       Conv,                                                       \
       kOnnxDomain,                                                \
-      1,                                                          \
-      12,                                                         \
+      start,                                                      \
+      end,                                                        \
+      T,                                                          \
+      kSyclExecutionProvider,                                     \
+      KernelDefBuilder()                                          \
+          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+      Conv<T>);
+
+#define REGISTER_CONV_KERNEL_TYPED(T, start)                      \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
+      Conv,                                                       \
+      kOnnxDomain,                                                \
+      start,                                                      \
       T,                                                          \
       kSyclExecutionProvider,                                     \
       KernelDefBuilder()                                          \
@@ -183,7 +194,8 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
 }
 
 // REGISTER KERNEL
-REGISTER_CONV_KERNEL_TYPED(float)
+REGISTER_VERSIONED_CONV_KERNEL_TYPED(float, 1, 10)
+REGISTER_CONV_KERNEL_TYPED(float, 11)
 
 }  // namespace sycl
 }  // namespace onnxruntime
