@@ -6,30 +6,30 @@
 namespace onnxruntime {
 namespace sycl {
 
-#defined REGISTER_VERSIONED_DROPOUT_KERNEL_TYPED(T, start, end)            \
-    ONNX_OPERATOR_VERSIONED_KERNEL_EX(                                     \
-        Dropout,                                                           \
-        kOnnxDomain,                                                       \
-        start,                                                             \
-        end,                                                               \
-        kSyclExecutionProvider,                                            \
-        KernelDefBuilder()                                                 \
-            .TypeConstraint("T", DataTypeImpl::AllIEEEFloatTensorTypes())  \
-            .TypeConstraint("T1", DataTypeImpl::AllIEEEFloatTensorTypes()) \
-            .TypeConstraint("T2", DataTypeImpl::GetTensorType <bool>()),   \
-        Dropout);
+#define REGISTER_VERSIONED_DROPOUT_KERNEL_TYPED(T, start, end)           \
+  ONNX_OPERATOR_VERSIONED_KERNEL_EX(                                     \
+      Dropout,                                                           \
+      kOnnxDomain,                                                       \
+      start,                                                             \
+      end,                                                               \
+      kSyclExecutionProvider,                                            \
+      KernelDefBuilder()                                                 \
+          .TypeConstraint("T", DataTypeImpl::AllIEEEFloatTensorTypes())  \
+          .TypeConstraint("T1", DataTypeImpl::AllIEEEFloatTensorTypes()) \
+          .TypeConstraint("T2", DataTypeImpl::GetTensorType<bool>()),    \
+      Dropout);
 
-#defined REGISTER_DROPOUT_KERNEL_TYPED(T, start)                           \
-    ONNX_OPERATOR_KERNEL_EX(                                               \
-        Dropout,                                                           \
-        kOnnxDomain,                                                       \
-        start,                                                             \
-        kSyclExecutionProvider,                                            \
-        KernelDefBuilder()                                                 \
-            .TypeConstraint("T", DataTypeImpl::AllIEEEFloatTensorTypes())  \
-            .TypeConstraint("T1", DataTypeImpl::AllIEEEFloatTensorTypes()) \
-            .TypeConstraint("T2", DataTypeImpl::GetTensorType <bool>()),   \
-        Dropout);
+#define REGISTER_DROPOUT_KERNEL_TYPED(T, start)                          \
+  ONNX_OPERATOR_KERNEL_EX(                                               \
+      Dropout,                                                           \
+      kOnnxDomain,                                                       \
+      start,                                                             \
+      kSyclExecutionProvider,                                            \
+      KernelDefBuilder()                                                 \
+          .TypeConstraint("T", DataTypeImpl::AllIEEEFloatTensorTypes())  \
+          .TypeConstraint("T1", DataTypeImpl::AllIEEEFloatTensorTypes()) \
+          .TypeConstraint("T2", DataTypeImpl::GetTensorType<bool>()),    \
+      Dropout);
 
 Status Dropout::ComputeInternal(OpKernelContext* context) const {
   //Get X_data
@@ -83,7 +83,7 @@ Status Dropout::ComputeInternal(OpKernelContext* context) const {
 }
 
 REGISTER_VERSIONED_DROPOUT_KERNEL_TYPED(float, 12, 12)
-REGISTER_DROPOUT_KERNEL_TYPED(float, 11)
+REGISTER_DROPOUT_KERNEL_TYPED(float, 13)
 
 }  // namespace sycl
 }  // namespace onnxruntime

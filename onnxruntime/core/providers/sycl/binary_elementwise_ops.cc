@@ -1,16 +1,11 @@
 // Codeplay Software Ltd.
 
-#include "core/providers/sycl/sycl_kernel.h"
-#include "core/framework/data_types_internal.h"
-#include "core/framework/op_kernel.h"
-#include "core/providers/sycl/sycl_fwd.h"
 #include "core/providers/sycl/binary_elementwise_ops.h"
 
 #include <CL/sycl.hpp>
 
 #include "sycldnn/backend/snn_backend.h"
-#include "sycldnn/bias/launch.h"
-#include "sycldnn/bias/params.h"
+#include "sycldnn/pointwise/launch.h"
 #include "sycldnn/status.h"
 
 namespace snn = sycldnn;
@@ -60,36 +55,31 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
                                    {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
                                     cl::sycl::property::buffer::use_host_ptr{}}};
 
-  cl::sycl::buffer<T, 1> X2_buffer{X2_data,
-                                   cl::sycl::range<1>{dataSize},
-                                   {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                    cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> Y_buffer{Y_data,
-                                  cl::sycl::range<1>{dataSize},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
-
   // SYCL DNN Backend
-  Backend backend{*Queue()};
-  snn::bias::BiasParams bias_params{};
-  bias_params.channels = 1;
-  bias_params.batch = 1;
-  bias_params.in_rows = dataSize;
-  bias_params.in_cols = 1;
-  bias_params.bias = dataSize;
+  auto queue = *Queue();
+  Backend backend(queue);
 
-  auto input_ = snn::backend::DeviceMemPointer(X1_buffer, 0);  //Offset = 0
-  auto biases_ = snn::backend::DeviceMemPointer(X2_buffer, 0);
-  auto output_ = snn::backend::DeviceMemPointer(Y_buffer, 0);
+  using DeviceMem = Backend::internal_pointer_type<T>;
 
-  // Launch Bias Add kernel
-  auto ev = snn::bias::launch<float>(input_,
-                                     biases_,
-                                     output_,
-                                     bias_params,
-                                     backend);
-  ev.event.wait_and_throw();
+  auto X1_ = DeviceMem(X1_buffer, 0);
+
+  DeviceMem input = backend.template allocate<T>(dataSize);
+
+  auto event = queue.submit([&](cl::sycl::handler& cgh) {
+    auto buf = input.get_buffer();
+    auto acc = buf.template get_access<cl::sycl::access::mode::discard_write>(cgh);
+    cgh.copy(X2_data, acc);
+  });
+  event.wait_and_throw();
+
+  snn::pointwise::launch<T, snn::pointwise::ResidualAdd, snn::pointwise::Forward, Backend>(X1_, input, dataSize, backend);
+
+  event = queue.submit([&](cl::sycl::handler& cgh) {
+    auto buf = input.get_buffer();
+    auto acc = buf.template get_access<cl::sycl::access::mode::read>(cgh);
+    cgh.copy(acc, Y_data);
+  });
+  event.wait_and_throw();
 
   return Status::OK();
 }
