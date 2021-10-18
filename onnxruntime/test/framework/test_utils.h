@@ -24,7 +24,9 @@
 #ifdef USE_COREML
 #include "core/providers/coreml/coreml_execution_provider.h"
 #endif
-
+#ifdef USE_SYCL
+#include "core/providers/sycl/sycl_execution_provider.h"
+#endif
 namespace onnxruntime {
 class Graph;
 
