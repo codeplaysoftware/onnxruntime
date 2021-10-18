@@ -15,12 +15,23 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering VERSIONNED TYPED Kernels
-#define REGISTER_GEMM_KERNEL_TYPED(T)                             \
+#define REGISTER_VERSIONED_GEMM_KERNEL_TYPED(T, start, end)       \
   ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
       Gemm,                                                       \
       kOnnxDomain,                                                \
-      1,                                                          \
-      12,                                                         \
+      start,                                                      \
+      end,                                                        \
+      T,                                                          \
+      kSyclExecutionProvider,                                     \
+      KernelDefBuilder()                                          \
+          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+      Gemm<T>);
+
+#define REGISTER_GEMM_KERNEL_TYPED(T, start)                      \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
+      Gemm,                                                       \
+      kOnnxDomain,                                                \
+      start,                                                      \
       T,                                                          \
       kSyclExecutionProvider,                                     \
       KernelDefBuilder()                                          \
@@ -90,7 +101,7 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
   if (nullptr != B) {
     const T* Bdata = B->template Data<T>();
     cl::sycl::buffer<T, 1> B_buffer{Bdata,
-                                    cl::sycl::range<1>{static_cast<size_t>(N)},
+                                    cl::sycl::range<1>{static_cast<size_t>(M * N)},
                                     {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
                                      cl::sycl::property::buffer::use_host_ptr{}}};
     auto B_ = DeviceMem{B_buffer, 0};
@@ -99,8 +110,8 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
     bias_params.in_rows = 1;
     bias_params.in_cols = 1;
     bias_params.batch = 1;
-    bias_params.channels = N;
-    bias_params.bias = N;
+    bias_params.channels = M * N;
+    bias_params.bias = M * N;
 
     snn::bias::launch<T>(ConstPointer{Y_}, B_, Y_, bias_params, backend);
     backend.template deallocate(B_);
@@ -114,7 +125,10 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
 }
 
 // REGISTER KERNEL
-REGISTER_GEMM_KERNEL_TYPED(float);
+REGISTER_VERSIONED_GEMM_KERNEL_TYPED(float, 7, 8)
+REGISTER_VERSIONED_GEMM_KERNEL_TYPED(float, 9, 10)
+REGISTER_VERSIONED_GEMM_KERNEL_TYPED(float, 11, 12)
+REGISTER_GEMM_KERNEL_TYPED(float, 13)
 
 }  // namespace sycl
 }  // namespace onnxruntime

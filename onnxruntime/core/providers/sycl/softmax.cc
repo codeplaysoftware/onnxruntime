@@ -15,12 +15,23 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering VERSIONNED TYPED Kernels
-#define REGISTER_SOFTMAX_KERNEL_TYPE(T)                           \
+#define REGISTER_VERSIONED_SOFTMAX_KERNEL_TYPE(T, start, end)     \
   ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
       Softmax,                                                    \
       kOnnxDomain,                                                \
-      1,                                                          \
-      12,                                                         \
+      start,                                                      \
+      end,                                                        \
+      T,                                                          \
+      kSyclExecutionProvider,                                     \
+      KernelDefBuilder()                                          \
+          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+      Softmax<T>);
+
+#define REGISTER_SOFTMAX_KERNEL_TYPE(T, start)                    \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
+      Softmax,                                                    \
+      kOnnxDomain,                                                \
+      start,                                                      \
       T,                                                          \
       kSyclExecutionProvider,                                     \
       KernelDefBuilder()                                          \
@@ -79,7 +90,9 @@ Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
 }
 
 // REGISTER KERNEL
-REGISTER_SOFTMAX_KERNEL_TYPE(float)
+REGISTER_VERSIONED_SOFTMAX_KERNEL_TYPE(float, 1, 10)
+REGISTER_VERSIONED_SOFTMAX_KERNEL_TYPE(float, 11, 12)
+REGISTER_SOFTMAX_KERNEL_TYPE(float, 13)
 
 }  // namespace sycl
 }  // namespace onnxruntime

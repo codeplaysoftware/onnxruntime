@@ -6,16 +6,25 @@
 namespace onnxruntime {
 namespace sycl {
 
-#define REGISTER_Flatten_KERNEL_TYPED(T)                          \
-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
-      Flatten,                                                    \
-      kOnnxDomain,                                                \
-      1,                                                          \
-      12,                                                         \
-      T,                                                          \
-      kSyclExecutionProvider,                                     \
-      KernelDefBuilder()                                          \
-          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+#define REGISTER_VERSIONED_FLATTEN_KERNEL_TYPED(start, end)              \
+  ONNX_OPERATOR_VERSIONED_KERNEL_EX(                                     \
+      Flatten,                                                           \
+      kOnnxDomain,                                                       \
+      start,                                                             \
+      end,                                                               \
+      kSyclExecutionProvider,                                            \
+      KernelDefBuilder()                                                 \
+          .TypeConstraint("T", DataTypeImpl::AllFixedSizeTensorTypes()), \
+      Flatten);
+
+#define REGISTER_FLATTEN_KERNEL_TYPED(start)                             \
+  ONNX_OPERATOR_KERNEL_EX(                                               \
+      Flatten,                                                           \
+      kOnnxDomain,                                                       \
+      start,                                                             \
+      kSyclExecutionProvider,                                            \
+      KernelDefBuilder()                                                 \
+          .TypeConstraint("T", DataTypeImpl::AllFixedSizeTensorTypes()), \
       Flatten);
 
 Status Flatten::ComputeInternal(OpKernelContext* context) const {
@@ -43,7 +52,10 @@ Status Flatten::ComputeInternal(OpKernelContext* context) const {
   return Status::OK();
 }
 
-REGISTER_Flatten_KERNEL_TYPED(float);
+REGISTER_VERSIONED_FLATTEN_KERNEL_TYPED(1, 8)
+REGISTER_VERSIONED_FLATTEN_KERNEL_TYPED(9, 10)
+REGISTER_VERSIONED_FLATTEN_KERNEL_TYPED(11, 12)
+REGISTER_FLATTEN_KERNEL_TYPED(13)
 
 }  // namespace sycl
 }  // namespace onnxruntime

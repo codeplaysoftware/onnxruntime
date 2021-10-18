@@ -1,6 +1,6 @@
 // Codeplay Software Ltd.
 
-#include "core/providers/sycl/maxpool.h"
+#include "core/providers/sycl/pool.h"
 
 #include <CL/sycl.hpp>
 
@@ -17,21 +17,32 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering VERSIONNED TYPED Kernels
-#define REGISTER_MAXPOOL_KERNEL_TYPED(T)                          \
-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
-      MaxPool,                                                    \
+#define REGISTER_POOLING_VERSIONED_KERNEL_TYPED(T, op, pool_type, start, end) \
+  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                                    \
+      op,                                                                     \
+      kOnnxDomain,                                                            \
+      start,                                                                  \
+      end,                                                                    \
+      T,                                                                      \
+      kSyclExecutionProvider,                                                 \
+      KernelDefBuilder()                                                      \
+          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()),             \
+      Pool<T, pool_type>);
+
+#define REGISTER_POOLING_KERNEL_TYPED(T, op, pool_type, start)    \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
+      op,                                                         \
       kOnnxDomain,                                                \
-      1,                                                          \
-      12,                                                         \
+      start,                                                      \
       T,                                                          \
       kSyclExecutionProvider,                                     \
       KernelDefBuilder()                                          \
           .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
-      MaxPool<T>);
+      Pool<T, pool_type>);
 
 // MaxPool
-template <typename T>
-Status MaxPool<T>::ComputeInternal(OpKernelContext* context) const {
+template <typename T, typename PoolType>
+Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   const Tensor* X_data = context->Input<Tensor>(0);
   const TensorShape& x_shape = X_data->Shape();
   size_t input_size = X_data->SizeInBytes() / sizeof(T);
@@ -110,9 +121,13 @@ Status MaxPool<T>::ComputeInternal(OpKernelContext* context) const {
   snn::transpose::convert_nchw_to_nhwc<T, Backend>(X_, input, input_sizes, backend);
 
   // Launch kernel
-  auto status =
-      snn::pooling::launch<float, snn::pooling::Max, snn::pooling::Forward>(
-          ConstPointer{input}, output, params, backend);
+  if constexpr (PoolType::type == onnxruntime::PoolType::kAveragePool) {
+    snn::pooling::launch<float, snn::pooling::Average, snn::pooling::Forward>(
+        ConstPointer{input}, output, params, backend);
+  } else if constexpr (PoolType::type == onnxruntime::PoolType::kMaxPool) {
+    snn::pooling::launch<float, snn::pooling::Max, snn::pooling::Forward>(
+        ConstPointer{input}, output, params, backend);
+  }
 
   const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out, (int)C};
   snn::transpose::convert_nhwc_to_nchw<T, Backend>(ConstPointer{output}, Y_, output_sizes, backend);
@@ -127,7 +142,17 @@ Status MaxPool<T>::ComputeInternal(OpKernelContext* context) const {
 }
 
 // REGISTER KERNEL
-REGISTER_MAXPOOL_KERNEL_TYPED(float)
+REGISTER_POOLING_VERSIONED_KERNEL_TYPED(float, MaxPool, MaxPool<1>, 1, 7)
+REGISTER_POOLING_VERSIONED_KERNEL_TYPED(float, MaxPool, MaxPool<8>, 8, 9)
+REGISTER_POOLING_KERNEL_TYPED(float, MaxPool, MaxPool<8>, 10)
+REGISTER_POOLING_KERNEL_TYPED(float, MaxPool, MaxPool<8>, 11)
+REGISTER_POOLING_KERNEL_TYPED(float, MaxPool, MaxPool<8>, 12)
+REGISTER_POOLING_KERNEL_TYPED(float, GlobalMaxPool, MaxPool<1>, 1)
+
+REGISTER_POOLING_VERSIONED_KERNEL_TYPED(float, AveragePool, AveragePool, 7, 9)
+REGISTER_POOLING_KERNEL_TYPED(float, AveragePool, AveragePool, 10)
+REGISTER_POOLING_KERNEL_TYPED(float, AveragePool, AveragePool, 11)
+REGISTER_POOLING_KERNEL_TYPED(float, GlobalAveragePool, AveragePool, 1)
 
 }  // namespace sycl
 }  // namespace onnxruntime

@@ -15,12 +15,23 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering VERSIONNED TYPED Kernels
-#define REGISTER_MATMUL_KERNEL_TYPED(T)                           \
+#define REGISTER_VERSIONED_MATMUL_KERNEL_TYPED(T, start, end)     \
   ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
       MatMul,                                                     \
       kOnnxDomain,                                                \
-      1,                                                          \
-      12,                                                         \
+      start,                                                      \
+      end,                                                        \
+      T,                                                          \
+      kSyclExecutionProvider,                                     \
+      KernelDefBuilder()                                          \
+          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+      MatMul<T>);
+
+#define REGISTER_MATMUL_KERNEL_TYPED(T, start)                    \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
+      MatMul,                                                     \
+      kOnnxDomain,                                                \
+      start,                                                      \
       T,                                                          \
       kSyclExecutionProvider,                                     \
       KernelDefBuilder()                                          \
@@ -83,7 +94,9 @@ Status MatMul<T>::ComputeInternal(OpKernelContext* context) const {
 }
 
 // REGISTER KERNEL
-REGISTER_MATMUL_KERNEL_TYPED(float)
+REGISTER_VERSIONED_MATMUL_KERNEL_TYPED(float, 1, 8)
+REGISTER_VERSIONED_MATMUL_KERNEL_TYPED(float, 9, 12)
+REGISTER_MATMUL_KERNEL_TYPED(float, 13)
 
 }  // namespace sycl
 }  // namespace onnxruntime
