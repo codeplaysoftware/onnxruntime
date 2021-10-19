@@ -15,37 +15,40 @@ namespace onnxruntime {
 
 namespace sycl {
 
-// Registering VERSIONNED TYPED Kernels
-#define REGISTER_BIN_ELEM_WISE_KERNELS_TYPED(T)                   \
+// Registering Kernels
+#define REGISTER_VERSIONED_ADD_KERNELS_TYPED(T, start, end)       \
   ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
       Add,                                                        \
       kOnnxDomain,                                                \
-      7,                                                          \
-      12,                                                         \
+      start,                                                      \
+      end,                                                        \
       T,                                                          \
       kSyclExecutionProvider,                                     \
       KernelDefBuilder()                                          \
           .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
       Add<T>);
 
-// Add Operator
+#define REGISTER_ADD_KERNELS_TYPED(T, start)                      \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
+      Add,                                                        \
+      kOnnxDomain,                                                \
+      start,                                                      \
+      T,                                                          \
+      kSyclExecutionProvider,                                     \
+      KernelDefBuilder()                                          \
+          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+      Add<T>);
+
 template <typename T>
 Status Add<T>::ComputeInternal(OpKernelContext* context) const {
-  // INPUT
   const Tensor* X1 = context->Input<Tensor>(0);
   const Tensor* X2 = context->Input<Tensor>(1);
 
-  // OUTPUT
   Tensor* Y = context->Output(0, X1->Shape());
 
-  // RAW DATA PTRs
-  const T* X1_data = nullptr;
-  const T* X2_data = nullptr;
-  T* Y_data = nullptr;
-
-  X1_data = X1->template Data<T>();
-  X2_data = X2->template Data<T>();
-  Y_data = Y->template MutableData<T>();
+  const T* X1_data = X1->template Data<T>();
+  const T* X2_data = X2->template Data<T>();
+  T* Y_data = Y->template MutableData<T>();
 
   size_t dataSize = Y->SizeInBytes() / sizeof(T);
 
@@ -81,10 +84,15 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
   });
   event.wait_and_throw();
 
+  backend.template deallocate(X1_);
+  backend.template deallocate(input);
+
   return Status::OK();
 }
 
-REGISTER_BIN_ELEM_WISE_KERNELS_TYPED(float)
+REGISTER_VERSIONED_ADD_KERNELS_TYPED(float, 7, 12)
+REGISTER_VERSIONED_ADD_KERNELS_TYPED(float, 13, 13)
+REGISTER_ADD_KERNELS_TYPED(float, 14)
 
 }  // namespace sycl
 }  // namespace onnxruntime

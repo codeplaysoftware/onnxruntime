@@ -4,13 +4,13 @@
 
 #include <CL/sycl.hpp>
 
-#include "sycldnn/status.h"
 #include "sycldnn/backend/snn_backend.h"
 #include "sycldnn/conv2d/launch.h"
 #include "sycldnn/conv2d/selector/default_selector.h"
 #include "sycldnn/conv2d/workspace_size.h"
 #include "sycldnn/bias/launch.h"
 #include "sycldnn/transpose/launch.h"
+#include "sycldnn/status.h"
 
 namespace snn = sycldnn;
 using Backend = snn::backend::SNNBackend;
@@ -111,7 +111,6 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   Backend backend{queue};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
-  using ConstPointer = typename Backend::template internal_pointer_type<T const>;
 
   auto selector = snn::conv2d::get_default_selector(queue.get_device());
   auto X_ = DeviceMem{X_buffer, 0};  //Offset = 0
@@ -174,12 +173,12 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
     bias_params.channels = static_cast<int>(M);
     bias_params.bias = static_cast<int>(M);
 
-    snn::bias::launch<T>(ConstPointer{output}, B_, output, bias_params, backend);
+    snn::bias::launch<T>(output, B_, output, bias_params, backend);
     backend.template deallocate(B_);
   }
 
   const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out, (int)M};
-  snn::transpose::convert_nhwc_to_nchw<T, Backend>(ConstPointer{output}, Y_, output_sizes, backend);
+  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, output_sizes, backend);
 
   backend.template deallocate(input);
   backend.template deallocate(weights);
