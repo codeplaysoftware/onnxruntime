@@ -82,7 +82,6 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
   Backend backend{*Queue()};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
-  using ConstPointer = typename Backend::template internal_pointer_type<T const>;
 
   auto X_ = DeviceMem(X_buffer, 0);  //Offset = 0
   auto W_ = DeviceMem(W_buffer, 0);
@@ -113,7 +112,7 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
     bias_params.channels = M * N;
     bias_params.bias = M * N;
 
-    snn::bias::launch<T>(ConstPointer{Y_}, B_, Y_, bias_params, backend);
+    snn::bias::launch<T>(Y_, B_, Y_, bias_params, backend);
     backend.template deallocate(B_);
   }
 

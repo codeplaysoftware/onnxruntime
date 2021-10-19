@@ -77,15 +77,15 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   params.in_cols = static_cast<int>(W_in);
   params.out_rows = static_cast<int>(H_out);
   params.out_cols = static_cast<int>(W_out);
-  params.window_rows = static_cast<int>(pool_attrs_.kernel_shape[0]);
-  params.window_cols = static_cast<int>(pool_attrs_.kernel_shape[1]);
-  params.stride_rows = static_cast<int>(pool_attrs_.strides[0]);
-  params.stride_cols = static_cast<int>(pool_attrs_.strides[1]);
+  params.window_rows = pool_attrs_.global_pooling ? static_cast<int>(H_in) : static_cast<int>(pool_attrs_.kernel_shape[0]);
+  params.window_cols = pool_attrs_.global_pooling ? static_cast<int>(W_in) : static_cast<int>(pool_attrs_.kernel_shape[1]);
+  params.stride_rows = pool_attrs_.global_pooling ? 1 : static_cast<int>(pool_attrs_.strides[0]);
+  params.stride_cols = pool_attrs_.global_pooling ? 1 : static_cast<int>(pool_attrs_.strides[1]);
   params.batch = static_cast<int>(N);
   params.channels = static_cast<int>(C);
-  params.pad_rows = static_cast<int>(pool_attrs_.pads[0]);
-  params.pad_cols = static_cast<int>(pool_attrs_.pads[2]);
-
+  params.pad_rows = pool_attrs_.global_pooling ? 0 : static_cast<int>(pool_attrs_.pads[0]);
+  params.pad_cols = pool_attrs_.global_pooling ? 0 : static_cast<int>(pool_attrs_.pads[2]);
+  
   // edge case: one or more dims with value of 0
   if (output_shape.Size() == 0)
     return Status::OK();
@@ -108,7 +108,6 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   Backend backend{*Queue()};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
-  using ConstPointer = typename Backend::template internal_pointer_type<T const>;
 
   auto X_ = DeviceMem(X_buffer, 0);
   auto Y_ = DeviceMem(Y_buffer, 0);
@@ -123,14 +122,14 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   // Launch kernel
   if constexpr (PoolType::type == onnxruntime::PoolType::kAveragePool) {
     snn::pooling::launch<float, snn::pooling::Average, snn::pooling::Forward>(
-        ConstPointer{input}, output, params, backend);
+        input, output, params, backend);
   } else if constexpr (PoolType::type == onnxruntime::PoolType::kMaxPool) {
     snn::pooling::launch<float, snn::pooling::Max, snn::pooling::Forward>(
-        ConstPointer{input}, output, params, backend);
+        input, output, params, backend);
   }
 
   const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out, (int)C};
-  snn::transpose::convert_nhwc_to_nchw<T, Backend>(ConstPointer{output}, Y_, output_sizes, backend);
+  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, output_sizes, backend);
 
   backend.template deallocate(input);
   backend.template deallocate(output);
@@ -150,7 +149,7 @@ REGISTER_POOLING_KERNEL_TYPED(float, MaxPool, MaxPool<8>, 12)
 REGISTER_POOLING_KERNEL_TYPED(float, GlobalMaxPool, MaxPool<1>, 1)
 
 REGISTER_POOLING_VERSIONED_KERNEL_TYPED(float, AveragePool, AveragePool, 7, 9)
-REGISTER_POOLING_KERNEL_TYPED(float, AveragePool, AveragePool, 10)
+REGISTER_POOLING_VERSIONED_KERNEL_TYPED(float, AveragePool, AveragePool, 10, 10)
 REGISTER_POOLING_KERNEL_TYPED(float, AveragePool, AveragePool, 11)
 REGISTER_POOLING_KERNEL_TYPED(float, GlobalAveragePool, AveragePool, 1)
 

@@ -107,7 +107,6 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   Backend backend{queue};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
-  using ConstPointer = typename Backend::template internal_pointer_type<T const>;
 
   auto X_ = DeviceMem(X_buffer, 0);
   auto scale_ = DeviceMem(scale_buffer, 0);
@@ -132,7 +131,17 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
 
   snn::batchnorm::launch<T, Backend, snn::batchnorm::Inference>(input, B_, scale_, mean_, var_, output, params, backend);
 
-  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, input_sizes, backend);
+  const std::vector<int> output_sizes = {(int)N, (int)H, (int)W, (int)C};
+  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, output_sizes, backend);
+
+  backend.template deallocate(X_);
+  backend.template deallocate(scale_);
+  backend.template deallocate(B_);
+  backend.template deallocate(mean_);
+  backend.template deallocate(var_);
+  backend.template deallocate(input);
+  backend.template deallocate(output);
+  backend.template deallocate(Y_);
 
   return Status::OK();
 }
