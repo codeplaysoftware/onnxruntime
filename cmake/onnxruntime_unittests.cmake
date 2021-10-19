@@ -456,6 +456,10 @@ if(onnxruntime_USE_COREML)
   endif()
 endif()
 
+if(onnxruntime_USE_SYCL)
+  list(APPEND onnxruntime_test_providers_dependencies onnxruntime_providers_sycl)
+endif()
+
 file(GLOB_RECURSE onnxruntime_test_tvm_src CONFIGURE_DEPENDS
   "${TEST_SRC_DIR}/tvm/*.h"
   "${TEST_SRC_DIR}/tvm/*.cc"
