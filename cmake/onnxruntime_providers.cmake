@@ -1352,8 +1352,8 @@ if (onnxruntime_USE_SYCL)
   add_dependencies(onnxruntime_providers_sycl ${onnxruntime_EXTERNAL_DEPENDENCIES})
 
   target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} ${CMAKE_CURRENT_BINARY_DIR})
-  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLBLAS_HOME}/src ${onnxruntime_SYCLBLAS_HOME}/include ${onnxruntime_SYCLBLAS_HOME}/external/computecpp-sdk/include) 
-  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLDNN_HOME}/src ${onnxruntime_SYCLDNN_HOME}/include ${onnxruntime_SYCLDNN_HOME}/build )
+  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLBLAS_HOME}/include ${onnxruntime_SYCLBLAS_HOME}/external/computecpp-sdk/include) 
+  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLDNN_HOME}/include ${onnxruntime_SYCLDNN_HOME}/build)
 
   if(is_dpcpp)
     message("++++++++++++++++++++++++++ SYCL COMPILER : DPCPP +++++++++++++++++++++++++++++")
