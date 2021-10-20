@@ -1,4 +1,19 @@
-// Codeplay Software Ltd.
+/*
+ * Copyright Codeplay Software Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "core/providers/sycl/gemm.h"
 #include "core/providers/cpu/math/gemm_helper.h"
 
@@ -87,15 +102,18 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
   auto W_ = DeviceMem(W_buffer, 0);
   auto Y_ = DeviceMem(Y_buffer, 0);
 
-  if (trans_A_ && !trans_B_) {
-    backend.template matmul<true, false, T, int>(X_, W_, Y_, beta_, M, K, N);
-  } else if (!trans_A_ && trans_B_) {
-    backend.template matmul<false, true, T, int>(X_, W_, Y_, beta_, M, K, N);
-  } else if (trans_A_ && trans_B_) {
-    backend.template matmul<true, true, T, int>(X_, W_, Y_, beta_, M, K, N);
-  } else {
-    backend.template matmul<false, false, T, int>(X_, W_, Y_, beta_, M, K, N);
-  }
+  auto executor = backend.get_executor();
+
+  auto trans_m = N;
+  auto trans_n = M;
+
+  auto ldc = trans_m;
+  auto lda = trans_B_ ? K : trans_m;
+  auto ldb = trans_A_ ? trans_n : K;
+
+  blas::_gemm(executor, trans_B_ ? 't' : 'n',
+              trans_A_ ? 't' : 'n', trans_m, trans_n, K,
+              alpha_, W_, lda, X_, ldb, beta_, Y_, ldc);
 
   if (nullptr != B) {
     const T* Bdata = B->template Data<T>();

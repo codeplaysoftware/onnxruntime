@@ -1,4 +1,18 @@
-// Codeplay Software Ltd.
+/*
+ * Copyright Codeplay Software Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include "core/framework/data_types_internal.h"
 #include "core/providers/sycl/dropout.h"
@@ -34,7 +48,6 @@ namespace sycl {
 Status Dropout::ComputeInternal(OpKernelContext* context) const {
   //Get X_data
   const Tensor* X = context->Input<Tensor>(0);
-  auto X_span = X->DataAsSpan<float>();
 
   if (X == nullptr)
     return Status(common::ONNXRUNTIME, common::FAIL, "X Input is not available.");
@@ -44,7 +57,6 @@ Status Dropout::ComputeInternal(OpKernelContext* context) const {
 
   //Get Y_data
   auto Y = context->Output(0, X_shape);
-  auto Y_span = Y->MutableDataAsSpan<float>();
 
   //Get mask_data
   auto mask = context->Output(1, X_shape);
@@ -74,12 +86,13 @@ Status Dropout::ComputeInternal(OpKernelContext* context) const {
 
     // If mask is requested, return all 1s.
     if (mask != nullptr) {
-      //   call to SYCL EP memset
+      //   TODO: add call to SYCL EP memset
       //   memset is supported from ComputeCpp 2.7 onwards
     }
+    return Status::OK();
+  } else {
+    return Status(onnxruntime::common::ONNXRUNTIME, onnxruntime::common::NOT_IMPLEMENTED, "Dropout not implemented for training");
   }
-
-  return Status::OK();
 }
 
 REGISTER_VERSIONED_DROPOUT_KERNEL_TYPED(float, 12, 12)
