@@ -1351,7 +1351,7 @@ if (onnxruntime_USE_SYCL)
   set_target_properties(onnxruntime_providers_sycl PROPERTIES LINKER_LANGUAGE CXX)
   add_dependencies(onnxruntime_providers_sycl ${onnxruntime_EXTERNAL_DEPENDENCIES})
 
-  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} ${CMAKE_CURRENT_BINARY_DIR})
+  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} ${CMAKE_CURRENT_BINARY_DIR} ${eigen_INCLUDE_DIRS})
   target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLBLAS_HOME}/include ${onnxruntime_SYCLBLAS_HOME}/external/computecpp-sdk/include) 
   target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLDNN_HOME}/include ${onnxruntime_SYCLDNN_HOME}/build)
 
