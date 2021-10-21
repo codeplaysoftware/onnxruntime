@@ -1328,19 +1328,11 @@ if (onnxruntime_USE_SYCL)
     "${ONNXRUNTIME_ROOT}/core/providers/sycl/*.cc"
   )
 
-  find_library(SYCLBLAS_LIBRARY
-  NAMES sycl_blas libsycl_blas
-  PATH_SUFFIXES buildCpp
-  HINTS ${onnxruntime_SYCLBLAS_HOME}
-  DOC "The SYCL-BLAS Shared Library for SYCL EP"
-  )
-
-  find_library(SYCLDNN_LIBRARY
-    NAMES sycldnn libsycldnn
-    PATH_SUFFIXES build
-    HINTS ${onnxruntime_SYCLDNN_HOME}
-    DOC "The SYCL-DNN Shared Library for SYCL EP"
-  )
+  find_package(SYCLBLAS)
+  #For SYCL-DNN, we need to pass SYCLDNN_DIR pointing to "/path/to/sycldnn/install/lib/sycldnn/cmake/sycldnn-config.cmake"
+  #Add the following when running the build.sh:
+  #--cmake_extra_defines SYCLDNN_DIR="/path/to/sycldnn/install/lib/sycldnn/cmake/sycldnn-config.cmake"
+  find_package(SYCLDNN REQUIRED)
 
   onnxruntime_add_static_library(onnxruntime_providers_sycl ${onnxruntime_providers_sycl_src})
   onnxruntime_add_include_to_target(onnxruntime_providers_sycl onnxruntime_common onnxruntime_framework onnx flatbuffers)
@@ -1364,7 +1356,7 @@ if (onnxruntime_USE_SYCL)
     set_target_properties(onnxruntime_providers_sycl PROPERTIES INTERFACE_LINK_LIBRARIES DPCPP::DPCPP )
     set_target_properties(onnxruntime_providers_sycl PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${SYCL_INCLUDE_DIRS}")
 
-    target_link_libraries(onnxruntime_providers_sycl PRIVATE DPCPP::DPCPP ${SYCLBLAS_LIBRARY} ${SYCLDNN_LIBRARY} )
+    target_link_libraries(onnxruntime_providers_sycl PRIVATE DPCPP::DPCPP SYCLBLAS::sycl_blas SYCLDNN::sycl_dnn)
 
   else()
   message("++++++++++++++++++++++++++ SYCL COMPILER : COMPUTECPP +++++++++++++++++++++++++++++")
@@ -1374,7 +1366,7 @@ if (onnxruntime_USE_SYCL)
     set_target_properties(onnxruntime_providers_sycl PROPERTIES INTERFACE_LINK_LIBRARIES ComputeCpp::ComputeCpp )
     set_target_properties(onnxruntime_providers_sycl PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${COMPUTECPP_SDK_INCLUDE};${SYCL_INCLUDE_DIRS}")
 
-    target_link_libraries(onnxruntime_providers_sycl PRIVATE ComputeCpp::ComputeCpp ${SYCLBLAS_LIBRARY} ${SYCLDNN_LIBRARY} )
+    target_link_libraries(onnxruntime_providers_sycl PRIVATE ComputeCpp::ComputeCpp SYCLBLAS::sycl_blas SYCLDNN::sycl_dnn)
 
   endif()
 endif()
