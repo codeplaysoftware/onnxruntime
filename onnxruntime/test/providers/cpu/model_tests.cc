@@ -392,7 +392,6 @@ TEST_P(ModelTest, Run) {
 
     // TensorRT EP CI uses Nvidia Tesla M60 which doesn't support fp16.
     broken_tests_keyword_set.insert({"FLOAT16"});
-
   }
 
   if (provider_name == "dml") {
@@ -547,10 +546,10 @@ TEST_P(ModelTest, Run) {
     }
 
     for (auto iter2 = broken_tests_keyword_set.begin(); iter2 != broken_tests_keyword_set.end(); ++iter2) {
-        std::string keyword = *iter2;
-        if (ToMBString(test_case_name).find(keyword) != std::string::npos) {
-          return;
-        }
+      std::string keyword = *iter2;
+      if (ToMBString(test_case_name).find(keyword) != std::string::npos) {
+        return;
+      }
     }
   }
   bool is_single_node = !model_info->GetNodeName().empty();
@@ -595,7 +594,7 @@ TEST_P(ModelTest, Run) {
               1000,
               1,
               1 << 30,
-              1, // enable fp16
+              1,  // enable fp16
               0,
               nullptr,
               0,
@@ -624,6 +623,8 @@ TEST_P(ModelTest, Run) {
         ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(DefaultAclExecutionProvider()));
       } else if (provider_name == "armnn") {
         ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(DefaultArmNNExecutionProvider()));
+      } else if (provider_name == "sycl") {
+        ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(DefaultSyclExecutionProvider()));
       }
 
       ASSERT_STATUS_OK(session_object.Load(model_path));
@@ -744,6 +745,9 @@ TEST_P(ModelTest, Run) {
 #endif
 #ifdef USE_ARMNN
   provider_names.push_back(ORT_TSTR("armnn"));
+#endif
+#ifdef USE_SYCL
+  provider_names.push_back(ORT_TSTR("sycl"));
 #endif
   std::vector<std::basic_string<ORTCHAR_T>> v;
   // Permanently exclude following tests because ORT support only opset starting from 7,
