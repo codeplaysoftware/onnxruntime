@@ -96,7 +96,7 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
 
   // Bail out early if one of the dimensions is zero.
   if (Y->Shape().Size() == 0) {
-    return Status(onnxruntime::common::ONNXRUNTIME, onnxruntime::common::INVALID_ARGUMENT, "Invalid Output Dimensions");
+    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Invalid Output Dimensions");
   }
 
   // RAW DATA PTRs
@@ -126,7 +126,10 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
+  //Creating a Conv selector instance
   auto selector = snn::conv2d::get_default_selector(queue.get_device());
+
+  //Creating Device Pointers to Buffers
   auto X_ = DeviceMem{X_buffer, 0};  //Offset = 0
   auto W_ = DeviceMem{W_buffer, 0};
   auto Y_ = DeviceMem{Y_buffer, 0};
@@ -134,6 +137,7 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   //First transpose the input feature map and filter weights to
   //the desired data layout
 
+  //Allocating Intermediate Memory and Workspace Memory to perform computations in NHWC format through SYCL-DNN
   DeviceMem input, weights, output, workspace;
   input = backend.template allocate<T>(static_cast<size_t>(N * C * H_in * W_in));
   weights = backend.template allocate<T>(static_cast<size_t>(M * C * R * S));
@@ -142,9 +146,13 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   const std::vector<int> weight_sizes = {(int)M, (int)C, (int)R, (int)S};
   const std::vector<int> weight_permutations = {2, 3, 1, 0};
 
+  //Performing input conversion from NCHW to NHWC for feature map
   snn::transpose::convert_nchw_to_nhwc<T, Backend>(X_, input, input_sizes, backend);
+
+  //Performing conversion from MCHW to HWCM for weights
   snn::transpose::launch<T, Backend>(W_, weights, weight_sizes, weight_permutations, backend);
 
+  //Setting Conv parameters
   snn::conv2d::Conv2DParams params;
   params.channels = static_cast<int>(C);
   params.features = static_cast<int>(M);
@@ -160,18 +168,23 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   params.pad_rows = static_cast<int>(pads[0]);
   params.pad_cols = static_cast<int>(pads[2]);
 
+  //Querying the required workspace size
   auto new_size = snn::conv2d::query_workspace_size<
                       snn::conv2d::conv_type::Forward>(params, *selector)
                       .recommended_size;
+
+  //Allocating workspace if required
   if (new_size > 0) {
     workspace = backend.template allocate<T>(new_size);
   }
 
   output = backend.template allocate<T>(static_cast<size_t>(N * M * H_out * W_out));
 
+  //Launching Conv kernel
   snn::conv2d::launch<T, snn::conv2d::conv_type::Forward>(
       input, weights, output, params, *selector, backend, workspace, new_size);
 
+  //Check if Bias Addition is required
   if (nullptr != B) {
     const T* Bdata = B->template Data<T>();
     cl::sycl::buffer<T, 1> B_buffer{Bdata,
@@ -180,6 +193,7 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
                                      cl::sycl::property::buffer::use_host_ptr{}}};
     auto B_ = DeviceMem(B_buffer, 0);
 
+    //Settubg Bias parameters
     snn::bias::BiasParams bias_params;
     bias_params.in_rows = static_cast<int>(H_out);
     bias_params.in_cols = static_cast<int>(W_out);
@@ -187,13 +201,18 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
     bias_params.channels = static_cast<int>(M);
     bias_params.bias = static_cast<int>(M);
 
+    //Launching Bias addition kernel
     snn::bias::launch<T>(output, B_, output, bias_params, backend);
+
+    //Deallocating the Bias device pointer
     backend.template deallocate(B_);
   }
 
+  //Reverting the output back to NCHW layout
   const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out, (int)M};
   snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, output_sizes, backend);
 
+  //Deallocating all the memory elements used
   backend.template deallocate(input);
   backend.template deallocate(weights);
   backend.template deallocate(workspace);

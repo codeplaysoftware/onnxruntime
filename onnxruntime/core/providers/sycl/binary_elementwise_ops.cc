@@ -78,10 +78,13 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
+  //Creating Device Pointers to Buffers
   auto X1_ = DeviceMem(X1_buffer, 0);
 
+  //Allocating Intermediate Memory to copy 2nd input buffer
   DeviceMem input = backend.template allocate<T>(dataSize);
 
+  //Copying contents of 2nd input to intermediate memory
   auto event = queue.submit([&](cl::sycl::handler& cgh) {
     auto buf = input.get_buffer();
     auto acc = buf.template get_access<cl::sycl::access::mode::discard_write>(cgh);
@@ -89,8 +92,10 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
   });
   event.wait_and_throw();
 
+  //Launching add kernel
   snn::pointwise::launch<T, snn::pointwise::ResidualAdd, snn::pointwise::Forward, Backend>(X1_, input, dataSize, backend);
 
+  //Copying output data back to the node's output
   event = queue.submit([&](cl::sycl::handler& cgh) {
     auto buf = input.get_buffer();
     auto acc = buf.template get_access<cl::sycl::access::mode::read>(cgh);
@@ -98,6 +103,7 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
   });
   event.wait_and_throw();
 
+  //Deallocating all the memory elements used
   backend.template deallocate(X1_);
   backend.template deallocate(input);
 

@@ -68,7 +68,7 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   ORT_RETURN_IF_ERROR(BatchNormHelper::ValidateInputs(X, scale, B, mean, var, spatial_ == 1));
   //Training mode not supported
   if (is_training_mode_ == 1) {
-    return Status(onnxruntime::common::ONNXRUNTIME, onnxruntime::common::NOT_IMPLEMENTED, "BatchNormalization Training mode not supported with SYCL EP");
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "BatchNormalization Training mode not supported with SYCL EP");
   }
 
   const int64_t N = x_shape[0];
@@ -121,6 +121,7 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
+  //Creating Device Pointers to Buffers
   auto X_ = DeviceMem(X_buffer, 0);
   auto scale_ = DeviceMem(scale_buffer, 0);
   auto B_ = DeviceMem(B_buffer, 0);
@@ -128,25 +129,31 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   auto var_ = DeviceMem(var_buffer, 0);
   auto Y_ = DeviceMem(Y_buffer, 0);
 
+  //Allocating Intermediate Memory to perform computations in NHWC format through SYCL-DNN
   DeviceMem input, output;
   input = backend.template allocate<T>(static_cast<size_t>(N * C * H * W));
   output = backend.template allocate<T>(static_cast<size_t>(N * C * H * W));
 
+  //Performing input conversion from NCHW to NHWC
   const std::vector<int> input_sizes = {(int)N, (int)C, (int)H, (int)W};
   snn::transpose::convert_nchw_to_nhwc<T, Backend>(X_, input, input_sizes, backend);
 
+  //Setting Batchnorm parameters
   snn::batchnorm::BatchNormParams params;
   params.batch = static_cast<int>(N);
   params.rows = static_cast<int>(H);
   params.cols = static_cast<int>(W);
   params.channels = static_cast<int>(C);
-  params.epsilon = static_cast<float>(epsilon_);
+  params.epsilon = epsilon_;
 
+  //Launching Batchnorm kernel
   snn::batchnorm::launch<T, Backend, snn::batchnorm::Inference>(input, B_, scale_, mean_, var_, output, params, backend);
 
+  //Reverting the output back to NCHW layout
   const std::vector<int> output_sizes = {(int)N, (int)H, (int)W, (int)C};
   snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, output_sizes, backend);
 
+  //Deallocating all the memory elements used
   backend.template deallocate(X_);
   backend.template deallocate(scale_);
   backend.template deallocate(B_);

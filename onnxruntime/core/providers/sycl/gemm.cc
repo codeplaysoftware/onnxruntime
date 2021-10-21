@@ -98,23 +98,28 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
+  //Creating Device Pointers to Buffers
   auto X_ = DeviceMem(X_buffer, 0);  //Offset = 0
   auto W_ = DeviceMem(W_buffer, 0);
   auto Y_ = DeviceMem(Y_buffer, 0);
 
   auto executor = backend.get_executor();
 
+  //Switch M and N to meet SYCL-BLAS requirements
   auto trans_m = N;
   auto trans_n = M;
 
+  //Compute ld dimension based on transpose parameters
   auto ldc = trans_m;
   auto lda = trans_B_ ? K : trans_m;
   auto ldb = trans_A_ ? trans_n : K;
 
+  //Launching SYCL-BLAS Gemm
   blas::_gemm(executor, trans_B_ ? 't' : 'n',
               trans_A_ ? 't' : 'n', trans_m, trans_n, K,
               alpha_, W_, lda, X_, ldb, beta_, Y_, ldc);
 
+  //Check if Bias Addition is required
   if (nullptr != B) {
     const T* Bdata = B->template Data<T>();
     cl::sycl::buffer<T, 1> B_buffer{Bdata,
@@ -123,6 +128,7 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
                                      cl::sycl::property::buffer::use_host_ptr{}}};
     auto B_ = DeviceMem{B_buffer, 0};
 
+    //Settubg Bias parameters
     snn::bias::BiasParams bias_params;
     bias_params.in_rows = 1;
     bias_params.in_cols = 1;
@@ -130,10 +136,14 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
     bias_params.channels = M * N;
     bias_params.bias = M * N;
 
+    //Launching Bias addition kernel
     snn::bias::launch<T>(Y_, B_, Y_, bias_params, backend);
+
+    //Deallocating the Bias device pointer
     backend.template deallocate(B_);
   }
 
+  //Deallocating all the memory elements used
   backend.template deallocate(X_);
   backend.template deallocate(W_);
   backend.template deallocate(Y_);

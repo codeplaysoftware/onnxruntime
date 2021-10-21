@@ -78,14 +78,17 @@ Status Relu<T>::ComputeInternal(OpKernelContext* context) const {
 
   // SYCL DNN Backend
   Backend backend{*Queue()};
+
   using DeviceMem = Backend::internal_pointer_type<T>;
 
+  //Creating Device Pointers to Buffers
   auto X1_ = DeviceMem(X1_buffer, 0);  //Offset = 0
   auto Y_ = DeviceMem(Y_buffer, 0);
 
-  // Launch kernel
+  // Launch Relu kernel
   snn::pointwise::launch<float, snn::pointwise::Relu, snn::pointwise::Forward>(X1_, Y_, dataSize, backend);
 
+  //Deallocating all the memory elements used
   backend.template deallocate(X1_);
   backend.template deallocate(Y_);
 
