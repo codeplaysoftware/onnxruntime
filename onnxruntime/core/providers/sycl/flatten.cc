@@ -58,6 +58,7 @@ Status Flatten::ComputeInternal(OpKernelContext* context) const {
   const void* source = X->DataRaw();
   void* target = Y->MutableDataRaw();
 
+  //Copy input data to output if required
   if (target != source) {
     auto data_transfer = this->GetDataTransfer();
     data_transfer->CopyTensor(*X, *Y);

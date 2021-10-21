@@ -52,7 +52,6 @@ namespace sycl {
           .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
       MatMul<T>);
 
-// MatMul Y = X1*X2 (Matrix multiplication)
 template <typename T>
 Status MatMul<T>::ComputeInternal(OpKernelContext* context) const {
   const Tensor* X1 = context->Input<Tensor>(0);
@@ -92,14 +91,18 @@ Status MatMul<T>::ComputeInternal(OpKernelContext* context) const {
 
   // SYCL DNN Backend
   Backend backend{*Queue()};
+
   using DeviceMem = Backend::internal_pointer_type<T>;
 
+  //Creating Device Pointers to Buffers
   auto X1_ = DeviceMem(X1_buffer, 0);  //Offset = 0
   auto X2_ = DeviceMem(X2_buffer, 0);
   auto Y_ = DeviceMem(Y_buffer, 0);
 
+  //Launching Matmul kernel
   backend.template matmul<false, false, T, int>(X1_, X2_, Y_, 0.f, M, K, N);
 
+  //Deallocating all the memory elements used
   backend.template deallocate(X1_);
   backend.template deallocate(X2_);
   backend.template deallocate(Y_);

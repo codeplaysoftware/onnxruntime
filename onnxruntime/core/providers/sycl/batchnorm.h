@@ -27,10 +27,7 @@ template <typename T>
 class BatchNorm final : public SyclKernel {
  public:
   BatchNorm(const OpKernelInfo& info) : SyclKernel(info) {
-    float temp;
-    ORT_ENFORCE(info.GetAttr<float>("epsilon", &temp).IsOK());
-
-    epsilon_ = static_cast<double>(temp);
+    ORT_ENFORCE(info.GetAttr<float>("epsilon", &epsilon_).IsOK());
 
     //TODO: need to add support for training mode, spatial_ and momentum_
     // leaving these as they are not used for now
@@ -40,9 +37,8 @@ class BatchNorm final : public SyclKernel {
   Status ComputeInternal(OpKernelContext* context) const override;
 
  private:
-  double epsilon_;
+  float epsilon_;
   int64_t spatial_ = 1;        // default as per spec
-                               //   double momentum_;
   bool is_training_mode_ = 0;  //default as per spec
 };
 

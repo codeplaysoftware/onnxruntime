@@ -122,17 +122,20 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
+  //Creating Device Pointers to Buffers
   auto X_ = DeviceMem(X_buffer, 0);
   auto Y_ = DeviceMem(Y_buffer, 0);
 
+  //Allocating Intermediate Memory to perform computations in NHWC format through SYCL-DNN
   DeviceMem input, output;
   input = backend.template allocate<T>(static_cast<size_t>(N * C * H_in * W_in));
   output = backend.template allocate<T>(static_cast<size_t>(N * C * H_out * W_out));
 
+  //Performing input conversion from NCHW to NHWC
   const std::vector<int> input_sizes = {(int)N, (int)C, (int)H_in, (int)W_in};
   snn::transpose::convert_nchw_to_nhwc<T, Backend>(X_, input, input_sizes, backend);
 
-  // Launch kernel
+  // Launch Pooling kernel
   if constexpr (PoolType::type == onnxruntime::PoolType::kAveragePool) {
     snn::pooling::launch<float, snn::pooling::Average, snn::pooling::Forward>(
         input, output, params, backend);
@@ -141,12 +144,13 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
         input, output, params, backend);
   }
 
+  //Reverting the output back to NCHW layout
   const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out, (int)C};
   snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, output_sizes, backend);
 
+  //Deallocating all the memory elements used
   backend.template deallocate(input);
   backend.template deallocate(output);
-
   backend.template deallocate(X_);
   backend.template deallocate(Y_);
 
