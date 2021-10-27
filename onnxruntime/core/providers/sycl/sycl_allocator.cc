@@ -23,7 +23,9 @@ namespace onnxruntime {
 void* SYCLAllocator::Alloc(size_t size) {
   void* p = nullptr;
   if (size > 0) {
-    p = cl::sycl::malloc_device(size, *q_.get());
+    p = cl::sycl::malloc_device(size, *q_.get(), cl::sycl::property_list{});
+    // FIXME: do this only for outputs
+    q_->memset(p, int{0}, size).wait();
   }
   LOGS_DEFAULT(INFO) << "Memory allocated with SYCL [ " << size << " bytes ]";
   return p;

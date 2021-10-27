@@ -68,10 +68,6 @@ Status Dropout::ComputeInternal(OpKernelContext* context) const {
   //Get the ratio_data
   float ratio_data = default_ratio_;
   auto ratio = context->Input<Tensor>(1);
-  if (ratio) {
-    utils::MLTypeCallDispatcher<float> t_disp(ratio->GetElementType());
-    t_disp.Invoke<GetRatioDataImpl>(ratio, ratio_data);
-  }
 
   const Tensor* training_mode = context->Input<Tensor>(2);
   //Check for inference mode.
@@ -90,6 +86,10 @@ Status Dropout::ComputeInternal(OpKernelContext* context) const {
       //   TODO: add call to SYCL EP memset
       //   memset is supported from ComputeCpp 2.7 onwards
     }
+    return Status::OK();
+  } else if (ratio) {
+    utils::MLTypeCallDispatcher<float> t_disp(ratio->GetElementType());
+    t_disp.Invoke<GetRatioDataImpl>(ratio, ratio_data);
     return Status::OK();
   } else {
     return Status(onnxruntime::common::ONNXRUNTIME, onnxruntime::common::NOT_IMPLEMENTED, "Dropout not implemented for training");

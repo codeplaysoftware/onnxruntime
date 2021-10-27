@@ -35,7 +35,6 @@ class Gemm final : public SyclKernel {
 
     ORT_ENFORCE(info.GetAttr<float>("alpha", &alpha_).IsOK());
     ORT_ENFORCE(info.GetAttr<float>("beta", &beta_).IsOK());
-    beta_ = 0.f;  //TODO: need to remove this line once we are able to do cl::sycl::memset(output,0,sizeof(output))
   }
 
   Status ComputeInternal(OpKernelContext* context) const override;

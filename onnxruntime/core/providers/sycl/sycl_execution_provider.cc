@@ -40,7 +40,7 @@ SYCLExecutionProvider::SYCLExecutionProvider() : IExecutionProvider{onnxruntime:
 }
 
 SYCLExecutionProvider::SYCLExecutionProvider(const SYCLExecutionProviderInfo& info)
-    : IExecutionProvider{onnxruntime::kSyclExecutionProvider}, info_{info}, queue_{info.device_selector ? std::make_shared<cl::sycl::queue>(cl::sycl::gpu_selector{}) : std::make_shared<cl::sycl::queue>(cl::sycl::cpu_selector{})} {
+    : IExecutionProvider{onnxruntime::kSyclExecutionProvider}, info_{info}, queue_{std::make_shared<cl::sycl::queue>(cl::sycl::default_selector{})} {
   LOGS_DEFAULT(INFO) << "SYCL EP instantiated using selector : \n\tdevice's name : " << queue_->get_device().get_info<cl::sycl::info::device::name>() << "\n\tdevice's vendor : " << queue_->get_device().get_info<cl::sycl::info::device::vendor>();
 }
 
