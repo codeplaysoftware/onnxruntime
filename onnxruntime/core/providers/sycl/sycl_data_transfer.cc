@@ -34,6 +34,8 @@ common::Status SYCLDataTransfer::CopyTensor(const Tensor& src, Tensor& dst, int 
   LOGS_DEFAULT(INFO) << "SYCL copy from device : " << src_device.ToString() << " to device : " << dst_device.ToString();
 
   if (dst_device.Type() == OrtDevice::CPU && src_device.Type() != OrtDevice::CPU) {
+    // FIXME: remove this hack
+    queue_->wait();
     cl::sycl::buffer<uint8_t, 1> X_buffer{src_data,
                                           cl::sycl::range<1>{size},
                                           {cl::sycl::property::buffer::context_bound{queue_->get_context()},

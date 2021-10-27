@@ -6,6 +6,9 @@ cmake_minimum_required(VERSION 3.18)
 cmake_policy(SET CMP0069 NEW)
 set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
 
+# FIXME: Move this
+add_compile_definitions(SYCL_LANGUAGE_VERSION=2020)
+
 cmake_policy(SET CMP0092 NEW)
 cmake_policy(SET CMP0091 NEW)
 if (${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.20")
