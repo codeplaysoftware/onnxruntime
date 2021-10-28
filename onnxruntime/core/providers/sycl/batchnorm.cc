@@ -71,10 +71,11 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
     return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "BatchNormalization Training mode not supported with SYCL EP");
   }
 
+  size_t input_dims = x_shape.NumDimensions();
   const int64_t N = x_shape[0];
-  const int64_t C = x_shape[1];
-  const int64_t H = x_shape[2];
-  const int64_t W = x_shape[3];
+  const int64_t C = input_dims > 1 ? x_shape[1] : 1;
+  const int64_t H = input_dims > 2 ? x_shape[2] : 1;
+  const int64_t W = input_dims > 3 ? x_shape[3] : 1;
 
   // RAW DATA PTRs
   const T* Xdata = X->template Data<T>();
