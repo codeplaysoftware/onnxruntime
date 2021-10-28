@@ -62,9 +62,9 @@ Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
   }
 
   const int64_t N = input_tensor->Shape()[0];
-  const int64_t C = input_tensor->Shape().Size() > 1 ? input_tensor->Shape()[1] : 1;
-  const int64_t H = input_tensor->Shape().Size() > 2 ? input_tensor->Shape()[2] : 1;
-  const int64_t W = input_tensor->Shape().Size() > 3 ? input_tensor->Shape()[3] : 1;
+  const int64_t C = input_tensor->Shape().NumDimensions() > 1 ? input_tensor->Shape()[1] : 1;
+  const int64_t H = input_tensor->Shape().NumDimensions() > 2 ? input_tensor->Shape()[2] : 1;
+  const int64_t W = input_tensor->Shape().NumDimensions() > 3 ? input_tensor->Shape()[3] : 1;
 
   bool is_transpose_required = H * W > 1;
 

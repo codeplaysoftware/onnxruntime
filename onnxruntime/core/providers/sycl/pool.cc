@@ -60,12 +60,13 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   const TensorShape& x_shape = X_data->Shape();
   size_t input_size = X_data->SizeInBytes() / sizeof(T);
   const int64_t N = X_data->Shape()[0];
-  const int64_t C = X_data->Shape()[1];
-  const int64_t H_in = X_data->Shape()[2];
-  const int64_t W_in = X_data->Shape()[3];
 
   size_t input_dims = x_shape.NumDimensions();
   ORT_RETURN_IF_NOT(input_dims >= 3, "Input dimension cannot be less than 3.");
+
+  const int64_t C = input_dims > 1 ? x_shape[1] : 1;
+  const int64_t H_in = input_dims > 2 ? x_shape[2] : 1;
+  const int64_t W_in = input_dims > 3 ? x_shape[3] : 1;
 
   size_t pooling_dims = input_dims - 2;
   if (pooling_dims > 3) {
@@ -82,22 +83,29 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   Tensor* Y_data = context->Output(0, output_shape);
   size_t output_size = Y_data->SizeInBytes() / sizeof(T);
 
-  const int64_t H_out = output_shape[2];
-  const int64_t W_out = output_shape[3];
+  const int64_t H_out = output_dims.size() > 2 ? output_shape[2] : 1;
+  const int64_t W_out = output_dims.size() > 3 ? output_shape[3] : 1;
 
   snn::pooling::PoolingParams params;
   params.in_rows = static_cast<int>(H_in);
   params.in_cols = static_cast<int>(W_in);
   params.out_rows = static_cast<int>(H_out);
   params.out_cols = static_cast<int>(W_out);
-  params.window_rows = pool_attrs_.global_pooling ? static_cast<int>(H_in) : static_cast<int>(pool_attrs_.kernel_shape[0]);
-  params.window_cols = pool_attrs_.global_pooling ? static_cast<int>(W_in) : static_cast<int>(pool_attrs_.kernel_shape[1]);
-  params.stride_rows = pool_attrs_.global_pooling ? 1 : static_cast<int>(pool_attrs_.strides[0]);
-  params.stride_cols = pool_attrs_.global_pooling ? 1 : static_cast<int>(pool_attrs_.strides[1]);
+  if (pool_attrs_.global_pooling) {
+    params.window_rows = static_cast<int>(H_in);
+    params.window_cols = static_cast<int>(W_in);
+    params.stride_rows = 1;
+    params.stride_cols = 1;
+  } else {
+    params.window_rows = static_cast<int>(pool_attrs_.kernel_shape[0]);
+    params.window_cols = pool_attrs_.kernel_shape.size() > 1 ? static_cast<int>(pool_attrs_.kernel_shape[1]) : 1;
+    params.stride_rows = static_cast<int>(pool_attrs_.strides[0]);
+    params.stride_cols = pool_attrs_.strides.size() > 1 ? static_cast<int>(pool_attrs_.strides[1]) : 1;
+  }
   params.batch = static_cast<int>(N);
   params.channels = static_cast<int>(C);
   params.pad_rows = pool_attrs_.global_pooling ? 0 : static_cast<int>(pool_attrs_.pads[0]);
-  params.pad_cols = pool_attrs_.global_pooling ? 0 : static_cast<int>(pool_attrs_.pads[2]);
+  params.pad_cols = pool_attrs_.global_pooling ? 0 : static_cast<int>(pool_attrs_.pads[pool_attrs_.pads.size() - 1]);
 
   // edge case: one or more dims with value of 0
   if (output_shape.Size() == 0)

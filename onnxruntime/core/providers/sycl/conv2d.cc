@@ -61,13 +61,17 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   const auto* X = context->Input<Tensor>(0);
   const auto* W = context->Input<Tensor>(1);
   const auto* B = context->Input<Tensor>(2);  // optional. nullptr if not provided
+
+  size_t x_dims = X->Shape().NumDimensions();
   const int64_t N = X->Shape()[0];
-  const int64_t C = X->Shape()[1];
-  const int64_t H_in = X->Shape()[2];
-  const int64_t W_in = X->Shape()[3];
+  const int64_t C = x_dims > 1 ? X->Shape()[1] : 1;
+  const int64_t H_in = x_dims > 2 ? X->Shape()[2] : 1;
+  const int64_t W_in = x_dims > 3 ? X->Shape()[3] : 1;
+
+  size_t w_dims = W->Shape().NumDimensions();
   const int64_t M = W->Shape()[0];
-  const int64_t R = W->Shape()[2];
-  const int64_t S = W->Shape()[3];
+  const int64_t R = w_dims > 2 ? W->Shape()[2] : 1;
+  const int64_t S = w_dims > 3 ? W->Shape()[3] : 1;
   ORT_RETURN_IF_ERROR(conv_attrs_.ValidateInputShape(X, W));
 
   std::vector<int64_t> kernel_shape;
@@ -91,8 +95,10 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   ORT_RETURN_IF_ERROR(conv_attrs_.InferOutputShape(input_shape, kernel_shape, strides, dilations, pads, Y_dims));
   Tensor* Y = context->Output(0, Y_dims);
   TensorShape output_shape = Y->Shape().Slice(2);
-  const int64_t H_out = Y->Shape()[2];
-  const int64_t W_out = Y->Shape()[3];
+
+  size_t y_dims = Y->Shape().NumDimensions();
+  const int64_t H_out = y_dims > 2 ? Y->Shape()[2] : 1;
+  const int64_t W_out = y_dims > 3 ? Y->Shape()[3] : 1;
 
   // Bail out early if one of the dimensions is zero.
   if (Y->Shape().Size() == 0) {
@@ -162,11 +168,11 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   params.window_rows = static_cast<int>(R);
   params.window_cols = static_cast<int>(S);
   params.stride_rows = static_cast<int>(strides[0]);
-  params.stride_cols = static_cast<int>(strides[1]);
+  params.stride_cols = static_cast<int>(strides[strides.size() - 1]);
   params.out_rows = static_cast<int>(H_out);
   params.out_cols = static_cast<int>(W_out);
   params.pad_rows = static_cast<int>(pads[0]);
-  params.pad_cols = static_cast<int>(pads[2]);
+  params.pad_cols = static_cast<int>(pads[pads.size() - 1]);
 
   //Querying the required workspace size
   auto new_size = snn::conv2d::query_workspace_size<
