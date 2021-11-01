@@ -52,9 +52,9 @@ std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(c
 
 ORT_API_STATUS_IMPL(OrtSessionOptionsAppendExecutionProvider_SYCL,
                     _In_ OrtSessionOptions* options,
-                    int device_selector) {
+                    int device_id) {
   SYCLExecutionProviderInfo info{};
-  info.device_selector = (device_selector != 0);  //0 : false (cpu selector), 1 : true (gpu selector)
+  info.device_id = device_id;
   options->provider_factories.push_back(onnxruntime::CreateExecutionProviderFactory_SYCL(info));
   return nullptr;
 }
@@ -63,7 +63,8 @@ ORT_API_STATUS_IMPL(OrtApis::SessionOptionsAppendExecutionProvider_SYCL,
                     _In_ OrtSessionOptions* options,
                     _In_ const OrtSYCLProviderOptions* sycl_options) {
   SYCLExecutionProviderInfo info{};
-  info.device_selector = (sycl_options->device_selector != 0);  //0 : false (cpu selector), 1 : true (gpu selector)
+  info.device_selector = sycl_options->device_selector;                        // Device Selector (Enum : GPU, CPU, DEFAULT, HOST)
+  info.device_id = gsl::narrow<OrtDevice::DeviceId>(sycl_options->device_id);  // Device Id (int)
   options->provider_factories.push_back(onnxruntime::CreateExecutionProviderFactory_SYCL(info));
   return nullptr;
 }

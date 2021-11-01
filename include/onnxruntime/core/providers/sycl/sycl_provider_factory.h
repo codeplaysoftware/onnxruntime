@@ -7,9 +7,9 @@ extern "C" {
 #endif
 
 /**
- * \param device_selector SYCL device selector, temporary int for CPU : 0, GPU : 1
+ * \param device_id SYCL device id (TODO : Map it to OpenCL device_id + Combined with device_selector)
  */
-ORT_API_STATUS(OrtSessionOptionsAppendExecutionProvider_SYCL, _In_ OrtSessionOptions* options, int device_selector);  //device selector say 0 : cpu, 1 gpu
+ORT_API_STATUS(OrtSessionOptionsAppendExecutionProvider_SYCL, _In_ OrtSessionOptions* options, int device_id);
 
 #ifdef __cplusplus
 }

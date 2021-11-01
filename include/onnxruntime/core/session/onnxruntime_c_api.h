@@ -515,12 +515,27 @@ typedef struct OrtOpenVINOProviderOptions {
   void* context;
 } OrtOpenVINOProviderOptions;
 
+/** \brief Device Selector for SYCL EP
+*/
+typedef enum OrtSYCLDeviceSelector {
+  DEFAULT,  // Default Selector (determined automatically by the implementation's) (mapped to cl::sycl::default_selector)
+  CPU,      // CPU Selector (mapped to cl::sycl::cpu_selector)
+  GPU,      // GPU Selector (mapped to cl::sycl::gpu_selector)
+  HOST,     // Fallback host selector (Native CPU execution)
+} OrtSYCLDeviceSelector;
+
 /** \brief SYCL Provider Options
 *
 * \see OrtApi::SessionOptionsAppendExecutionProvider_SYCL
 */
 typedef struct OrtSYCLProviderOptions {
-  int device_selector;  //Mapped to SYCL device selector
+#ifdef __cplusplus
+  OrtSYCLProviderOptions() : device_selector{OrtSYCLDeviceSelector::DEFAULT} {}
+#endif
+
+  OrtSYCLDeviceSelector device_selector;  // Mapped to SYCL device selector (CPU, GPU, Host, Default)
+  int device_id;                          // SYCL device id (0 = default device), TODO : map it to OpenCL device_id
+
 } OrtSYCLProviderOptions;
 
 struct OrtApi;

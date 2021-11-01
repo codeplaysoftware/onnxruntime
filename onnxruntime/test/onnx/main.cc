@@ -427,9 +427,9 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
     }
     if (enable_sycl) {
 #ifdef USE_SYCL
-      p_models = 1;                     // Nb of cores to use 
+      p_models = 1;  // Nb of cores to use
       OrtSYCLProviderOptions syclOptions;
-      syclOptions.device_selector = 1;  // SYCL CPU Selector
+      syclOptions.device_selector = OrtSYCLDeviceSelector::DEFAULT;
       sf.SetGraphOptimizationLevel(ORT_DISABLE_ALL);
       sf.AppendExecutionProvider_SYCL(syclOptions);
 #else
