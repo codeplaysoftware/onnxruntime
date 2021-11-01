@@ -16,24 +16,53 @@
 
 #include "core/providers/sycl/sycl_execution_provider_info.h"
 #include "core/framework/provider_options_utils.h"
+#include "core/common/parse_string.h"
 
 namespace onnxruntime {
 namespace sycl {
 namespace provider_option_names {
 constexpr const char* kDeviceSelector = "device_selector";
-
+constexpr const char* kDeviceId = "device_id";
 }  // namespace provider_option_names
 }  // namespace sycl
 
+namespace {
+// Target device selectors for SYCL
+const EnumNameMapping<OrtSYCLDeviceSelector> ort_sycl_device_selector_mapping{
+    {DEFAULT, "DEFAULT"},
+    {GPU, "GPU"},
+    {CPU, "CPU"},
+    {HOST, "HOST"},
+};
+}  // namespace
+
 SYCLExecutionProviderInfo SYCLExecutionProviderInfo::FromProviderOptions(const ProviderOptions& options) {
   SYCLExecutionProviderInfo info{};
-  ProviderOptionsParser{}.AddAssignmentToReference(sycl::provider_option_names::kDeviceSelector, info.device_selector).Parse(options);
+  ORT_THROW_IF_ERROR(
+      ProviderOptionsParser{}
+          .AddValueParser(
+              sycl::provider_option_names::kDeviceId,
+              [&info](const std::string& value_str) -> Status {
+                ORT_RETURN_IF_ERROR(ParseStringWithClassicLocale(value_str, info.device_id));
+                ORT_RETURN_IF_NOT(
+                    0 <= info.device_id,
+                    "Invalid device ID: ", info.device_id,
+                    "Device ID must be positive");  // Further checks can be added on device_id once mapped to a CL device_id
+                return Status::OK();
+              })
+          .AddAssignmentToEnumReference(
+              sycl::provider_option_names::kDeviceSelector,
+              ort_sycl_device_selector_mapping, info.device_selector)
+          .Parse(options));
+
   return info;
 }
 
 ProviderOptions SYCLExecutionProviderInfo::ToProviderOptions(const SYCLExecutionProviderInfo& info) {
   const ProviderOptions options{
-      {sycl::provider_option_names::kDeviceSelector, MakeStringWithClassicLocale(info.device_selector)},
+      {sycl::provider_option_names::kDeviceSelector,
+       EnumToName(ort_sycl_device_selector_mapping, info.device_selector)},
+      {sycl::provider_option_names::kDeviceId, MakeStringWithClassicLocale(info.device_id)},
   };
 
   return options;

@@ -28,9 +28,10 @@ using namespace ::onnxruntime::logging;
 namespace onnxruntime {
 namespace test {
 
-TEST(SYCLExecutionProviderTest, MetadataTestCPU) {
+// This test should not be disabled (SYCL Default Selector)
+TEST(SYCLExecutionProviderTest, MetadataTestDEFAULT) {
   SYCLExecutionProviderInfo info;
-  info.device_selector = false;
+  info.device_selector = OrtSYCLDeviceSelector::DEFAULT;  // And Device ID being 0 by default
   auto provider = std::make_unique<SYCLExecutionProvider>(info);
   EXPECT_TRUE(provider != nullptr);
 
@@ -40,9 +41,23 @@ TEST(SYCLExecutionProviderTest, MetadataTestCPU) {
   ASSERT_STREQ(provider->GetAllocator(0, OrtMemTypeDefault)->Info().name, "sycl");
 }
 
+// This test can be disabled when testing non CPU targets
+TEST(SYCLExecutionProviderTest, MetadataTestCPU) {
+  SYCLExecutionProviderInfo info;
+  info.device_selector = OrtSYCLDeviceSelector::CPU;  // And Device ID being 0 by default
+  auto provider = std::make_unique<SYCLExecutionProvider>(info);
+  EXPECT_TRUE(provider != nullptr);
+
+  auto allocator_manager_ = std::make_shared<onnxruntime::AllocatorManager>();
+  provider->RegisterAllocator(allocator_manager_);
+
+  ASSERT_STREQ(provider->GetAllocator(0, OrtMemTypeDefault)->Info().name, "sycl");
+}
+
+// This test can be disabled when testing non GPU targets
 TEST(SYCLExecutionProviderTest, MetadataTestGPU) {
   SYCLExecutionProviderInfo info;
-  info.device_selector = true;
+  info.device_selector = OrtSYCLDeviceSelector::GPU;  // And Device ID being 0 by default
   auto provider = std::make_unique<SYCLExecutionProvider>(info);
   EXPECT_TRUE(provider != nullptr);
 
@@ -101,7 +116,7 @@ TEST(SYCLExecutionProviderTest, FunctionTest_1) {
   // Verification is conducted by forcing the placement of at least one node to SYCL EP
   // and comparing with default CPU EP output
   SYCLExecutionProviderInfo info;
-  info.device_selector = true;  // true : GPU Selector
+  info.device_selector = OrtSYCLDeviceSelector::DEFAULT;
   RunAndVerifyOutputsWithEP(model_file_name, "SYCLExecutionProviderTest.FunctionTest_1",
                             std::make_unique<SYCLExecutionProvider>(info),
                             feeds);

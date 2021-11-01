@@ -22,14 +22,12 @@
 
 namespace onnxruntime {
 struct SYCLExecutionProviderInfo {
-  explicit SYCLExecutionProviderInfo(bool use_gpu) : device_selector(use_gpu) {}
-  SYCLExecutionProviderInfo() = default;
-
-  // Conversion methods : Infos<->Options (Seems optional, not used so far)
+  // Conversion methods : Infos<->Options
   static SYCLExecutionProviderInfo FromProviderOptions(const ProviderOptions& options);
   static ProviderOptions ToProviderOptions(const SYCLExecutionProviderInfo& info);
 
-  // Main infos (to be extended)
-  bool device_selector{false};
+  // Main infos 
+  OrtSYCLDeviceSelector device_selector{DEFAULT};
+  OrtDevice::DeviceId device_id{0};
 };
 }  // namespace onnxruntime
