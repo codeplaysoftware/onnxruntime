@@ -70,23 +70,28 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
 
   size_t w_dims = W->Shape().NumDimensions();
   const int64_t M = W->Shape()[0];
+  const int64_t C_w = w_dims > 1 ? W->Shape()[1] : 1;
   const int64_t R = w_dims > 2 ? W->Shape()[2] : 1;
   const int64_t S = w_dims > 3 ? W->Shape()[3] : 1;
   ORT_RETURN_IF_ERROR(conv_attrs_.ValidateInputShape(X, W));
+
+  if (C != C_w) {
+    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Invalid Channel Dimensions");
+  }
 
   std::vector<int64_t> kernel_shape;
   ORT_RETURN_IF_ERROR(conv_attrs_.ComputeKernelShape(W->Shape(), kernel_shape));
 
   std::vector<int64_t> pads(conv_attrs_.pads);
-  if (pads.empty()) {
+  if (pads.size() < 2 * kernel_shape.size()) {
     pads.resize(kernel_shape.size() * 2, 0);
   }
   std::vector<int64_t> dilations(conv_attrs_.dilations);
-  if (dilations.empty()) {
+  if (dilations.size() < kernel_shape.size()) {
     dilations.resize(kernel_shape.size(), 1);
   }
   std::vector<int64_t> strides(conv_attrs_.strides);
-  if (strides.empty()) {
+  if (strides.size() < kernel_shape.size()) {
     strides.resize(kernel_shape.size(), 1);
   }
 
@@ -102,7 +107,7 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
 
   // Bail out early if one of the dimensions is zero.
   if (Y->Shape().Size() == 0) {
-    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Invalid Output Dimensions");
+    return Status::OK();
   }
 
   // RAW DATA PTRs
