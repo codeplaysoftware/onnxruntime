@@ -114,6 +114,8 @@ TEST(PoolTest, MaxPool_F16) {
 }
 #endif
 
+/** TODO: Add support for optional 'indicies' output tensor with SYCL EP **/
+#ifndef USE_SYCL
 static void MaxPool_8_WithIndexTest(bool has_index, int64_t storage_order = 0) {
   OpTester test("MaxPool", 8);
 
@@ -164,12 +166,16 @@ static void MaxPool_8_WithIndexTest(bool has_index, int64_t storage_order = 0) {
   }
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kDnnlExecutionProvider, kTensorrtExecutionProvider, kAclExecutionProvider, kArmNNExecutionProvider});
 }
+#endif
 
+/** TODO: Add support for optional 'indicies' output tensor with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool_8_With_Index) {
   MaxPool_8_WithIndexTest(false);                      // row major
   MaxPool_8_WithIndexTest(true, 0 /*storage_order*/);  // row major
   MaxPool_8_WithIndexTest(true, 1 /*storage_order*/);  // col major
 }
+#endif
 
 TEST(PoolTest, MaxPool1D) {
   OpTester test("MaxPool");
@@ -189,6 +195,8 @@ TEST(PoolTest, MaxPool1D) {
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
 
+/** TODO: Add support for optional 'indicies' output tensor with SYCL EP **/
+#ifndef USE_SYCL
 static void MaxPool1D_8_WithIndexTest(int64_t storage_order) {
   OpTester test("MaxPool", 8);
 
@@ -209,11 +217,15 @@ static void MaxPool1D_8_WithIndexTest(int64_t storage_order) {
   test.AddOutput<int64_t>("Indices", expected_dims, expected_indices);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider, kAclExecutionProvider});
 }
+#endif
 
+/** TODO: Add support for optional 'indicies' output tensor with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool1D_8_With_Index) {
   MaxPool1D_8_WithIndexTest(0 /*storage_order*/);
   MaxPool1D_8_WithIndexTest(1 /*storage_order*/);
 }
+#endif
 
 static void MaxPool1D_12_WithIndexTest_int8(int64_t storage_order) {
   OpTester test("MaxPool", 12);
@@ -265,7 +277,7 @@ TEST(PoolTest, MaxPool1D_12_With_Index_8bits) {
 }
 
 // Used by MaxPool2D_uint8
-template<typename InputIter>
+template <typename InputIter>
 void print_vector(std::ostream& os, const std::string& txt, InputIter begin, InputIter end) {
   os << txt;
   while (begin != end) {
@@ -303,6 +315,8 @@ TEST(PoolTest, MaxPool2D_uint8) {
 #endif
 }
 
+/** TODO: Add support for dilation with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_1d) {
   OpTester test("MaxPool", 10);
 
@@ -322,6 +336,7 @@ TEST(PoolTest, MaxPool_10_Dilation_1d) {
   test.AddOutput<float>("Y", expected_dims, expected_vals);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
+#endif
 
 TEST(PoolTest, MaxPool_DefaultDilations) {
   OpTester test("MaxPool");
@@ -383,6 +398,8 @@ TEST(PoolTest, MaxPool_DefaultDilations_uint8) {
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
 
+/** TODO: Add support for dilation with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_DilationPadding_1d) {
   OpTester test("MaxPool", 10);
 
@@ -402,7 +419,10 @@ TEST(PoolTest, MaxPool_10_DilationPadding_1d) {
   test.AddOutput<float>("Y", expected_dims, expected_vals);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider});
 }
+#endif
 
+/** TODO: Add support for dilation with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_2d) {
   OpTester test("MaxPool", 10);
 
@@ -425,7 +445,10 @@ TEST(PoolTest, MaxPool_10_Dilation_2d) {
   test.AddOutput<float>("Y", expected_dims, expected_vals);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
+#endif
 
+/** TODO: Add support for dilation with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_2d_int8) {
   OpTester test("MaxPool", 12);
 
@@ -448,7 +471,10 @@ TEST(PoolTest, MaxPool_10_Dilation_2d_int8) {
   test.AddOutput<int8_t>("Y", expected_dims, expected_vals);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
+#endif
 
+/** TODO: Add support for dilation with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_DilationPadding_2d) {
   OpTester test("MaxPool", 10);
 
@@ -476,7 +502,10 @@ TEST(PoolTest, MaxPool_10_DilationPadding_2d) {
   test.Run(OpTester::ExpectResult::kExpectSuccess, "",
            {kCudaExecutionProvider, kTensorrtExecutionProvider});
 }
+#endif
 
+/** TODO: Add support for dilation with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_Ceil0_2d) {
   OpTester test("MaxPool", 10);
 
@@ -522,7 +551,10 @@ TEST(PoolTest, MaxPool_12_Dilation_Ceil0_2d_int8) {
   test.AddOutput<int8_t>("Y", expected_dims, expected_vals);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider, kAclExecutionProvider});
 }
+#endif
 
+/** TODO: Add support for dilation with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_Ceil1_2d) {
   OpTester test("MaxPool", 10);
 
@@ -546,7 +578,10 @@ TEST(PoolTest, MaxPool_10_Dilation_Ceil1_2d) {
   test.AddOutput<float>("Y", expected_dims, expected_vals);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider, kAclExecutionProvider});
 }
+#endif
 
+/** TODO: Add support for dilation with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_DilationPadding_3d) {
   OpTester test("MaxPool", 10);
 
@@ -581,6 +616,7 @@ TEST(PoolTest, MaxPool_10_DilationPadding_3d) {
   test.AddOutput<float>("Y", expected_dims, expected_vals);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider});
 }
+#endif
 
 TEST(PoolTest, GlobalMaxPool) {
   OpTester test("GlobalMaxPool");
@@ -658,6 +694,8 @@ TEST(PoolTest, GlobalMaxPool) {
   test.Run();
 }
 
+/** TODO: Add support for 3D MaxPool with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, GlobalMaxPool3D) {
   OpTester test("GlobalMaxPool");
 
@@ -733,6 +771,7 @@ TEST(PoolTest, GlobalMaxPool3D) {
   test.AddOutput<float>("Y", expected_dims, expected_vals);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
+#endif
 
 TEST(PoolTest, AveragePool) {
   OpTester test("AveragePool");
@@ -815,6 +854,8 @@ TEST(PoolTest, AveragePool) {
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
 
+/** TODO: Add support for Pad Pixel with SYCL EP **/
+#ifndef USE_SYCL
 TEST(PoolTest, AveragePool_IncludePadPixel) {
   OpTester test("AveragePool");
 
@@ -838,6 +879,7 @@ TEST(PoolTest, AveragePool_IncludePadPixel) {
   test.AddOutput<float>("Y", expected_dims, expected_vals);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
+#endif
 
 // test 'strides' attribute not specified
 TEST(PoolTest, AveragePool_DefaultStrides) {
