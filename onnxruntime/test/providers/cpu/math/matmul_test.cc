@@ -21,40 +21,55 @@ template <typename T>
 std::vector<MatMulTestData<T>> GenerateTestCases() {
   std::vector<MatMulTestData<T>> test_cases;
 
+/** TODO: Add support for padding & broadcasting with SYCL EP **/
+#ifndef USE_SYCL
   test_cases.push_back(
       {"test padding and broadcast",
        {3, 1, 1, 2},
        {2, 2, 2},
        {3, 2, 1, 2},
        {2, 3, 6, 7, 6, 11, 26, 31, 10, 19, 46, 55}});
+#endif
 
+/** TODO: Add support for padding & broadcasting with SYCL EP **/
+#ifndef USE_SYCL
   test_cases.push_back(
       {"test padding and broadcast",
        {2, 3, 2},
        {3, 2, 2, 1},
        {3, 2, 3, 1},
        {1, 3, 5, 33, 43, 53, 5, 23, 41, 85, 111, 137, 9, 43, 77, 137, 179, 221}});
+#endif
 
+/** TODO: Add support for padding & broadcasting with SYCL EP **/
+#ifndef USE_SYCL
   test_cases.push_back(
       {"test left 1D",
        {2},
        {3, 2, 1},
        {3, 1},
        {1, 3, 5}});
+#endif
 
+/** TODO: Add support for padding & broadcasting with SYCL EP **/
+#ifndef USE_SYCL
   test_cases.push_back(
       {"test right 1D",
        {3, 1, 2},
        {2},
        {3, 1},
        {1, 3, 5}});
+#endif
 
+/** TODO: Add support for padding & broadcasting with SYCL EP **/
+#ifndef USE_SYCL
   test_cases.push_back(
       {"test left 1D right 2D",
        {2},
        {2, 3},
        {3},
        {3, 4, 5}});
+#endif
 
   test_cases.push_back(
       {"test scalar output",
@@ -84,19 +99,25 @@ std::vector<MatMulTestData<T>> GenerateTestCases() {
        {2, 2, 4},
        {20, 23, 26, 29, 56, 68, 80, 92, 92, 113, 134, 155, 128, 158, 188, 218}});
 
+/** TODO: Add support for padding & broadcasting with SYCL EP **/
+#ifndef USE_SYCL
   test_cases.push_back(
       {"test 2D special 3",
        {2, 6},
        {1, 1, 6, 1},
        {1, 1, 2, 1},
        {55, 145}});
+#endif
 
+/** TODO: Add support for padding & broadcasting with SYCL EP **/
+#ifndef USE_SYCL
   test_cases.push_back(
       {"test 2D empty input",
        {3, 4},
        {4, 0},
        {3, 0},
        {}});
+#endif
 
   return test_cases;
 }

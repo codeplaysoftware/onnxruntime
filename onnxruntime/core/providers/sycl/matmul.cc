@@ -73,19 +73,23 @@ Status MatMul<T>::ComputeInternal(OpKernelContext* context) const {
   const T* X2_data = X2->template Data<T>();
   T* Y_data = Y->template MutableData<T>();
 
+  size_t X1_size = X1->SizeInBytes() / sizeof(T);
+  size_t X2_size = X2->SizeInBytes() / sizeof(T);
+  size_t Y_size = Y->SizeInBytes() / sizeof(T);
+
   // Buffer USM Interop
   cl::sycl::buffer<T, 1> X1_buffer{X1_data,
-                                   cl::sycl::range<1>{M * K},
+                                   cl::sycl::range<1>{X1_size},
                                    {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
                                     cl::sycl::property::buffer::use_host_ptr{}}};
 
   cl::sycl::buffer<T, 1> X2_buffer{X2_data,
-                                   cl::sycl::range<1>{K * N},
+                                   cl::sycl::range<1>{X2_size},
                                    {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
                                     cl::sycl::property::buffer::use_host_ptr{}}};
 
   cl::sycl::buffer<T, 1> Y_buffer{Y_data,
-                                  cl::sycl::range<1>{M * N},
+                                  cl::sycl::range<1>{Y_size},
                                   {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
                                    cl::sycl::property::buffer::use_host_ptr{}}};
 
