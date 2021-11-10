@@ -37,14 +37,12 @@ struct KernelRegistryAndStatus {
 
 namespace onnxruntime {
 
-SYCLExecutionProvider::SYCLExecutionProvider() : IExecutionProvider{onnxruntime::kSyclExecutionProvider},
-                                                 queue_{make_shared<cl::sycl::queue>(cl::sycl::default_selector{})} {
-  LOGS_DEFAULT(INFO) << "SYCL EP instantiated using DEFAULT SYCL Selector : \n\tdevice's name : " << queue_->get_device().get_info<cl::sycl::info::device::name>() << "\n\tdevice's vendor : " << queue_->get_device().get_info<cl::sycl::info::device::vendor>();
+SYCLExecutionProvider::SYCLExecutionProvider() : IExecutionProvider{onnxruntime::kSyclExecutionProvider}, queue_{make_shared<cl::sycl::queue>(cl::sycl::default_selector{})} {
+  LOGS_DEFAULT(INFO) << "SYCL EP instantiated using DEFAULT SYCL Selector : \n\tdevice's name : " << queue_->get_device().get_info<cl::sycl::info::device::name>() << "\n\tdevice's vendor : "
+                     << queue_->get_device().get_info<cl::sycl::info::device::vendor>();
 }
 
-SYCLExecutionProvider::SYCLExecutionProvider(const SYCLExecutionProviderInfo& info) : IExecutionProvider{onnxruntime::kSyclExecutionProvider},
-                                                                                      info_{info},
-                                                                                      queue_{info.device_selector == OrtSYCLDeviceSelector::CPU ? make_shared<cl::sycl::queue>(cl::sycl::cpu_selector{}) : (info.device_selector == OrtSYCLDeviceSelector::GPU ? make_shared<cl::sycl::queue>(cl::sycl::gpu_selector{}) : make_shared<cl::sycl::queue>(cl::sycl::default_selector{}))} {
+SYCLExecutionProvider::SYCLExecutionProvider(const SYCLExecutionProviderInfo& info) : IExecutionProvider{onnxruntime::kSyclExecutionProvider}, info_{info}, queue_{info.device_selector == OrtSYCLDeviceSelector::CPU ? make_shared<cl::sycl::queue>(cl::sycl::cpu_selector{}) : (info.device_selector == OrtSYCLDeviceSelector::GPU ? make_shared<cl::sycl::queue>(cl::sycl::gpu_selector{}) : make_shared<cl::sycl::queue>(cl::sycl::default_selector{}))} {
   LOGS_DEFAULT(INFO) << "SYCL EP instantiated using Device Selector : \n\tdevice's name : " << queue_->get_device().get_info<cl::sycl::info::device::name>() << "\n\tdevice's vendor : " << queue_->get_device().get_info<cl::sycl::info::device::vendor>();
 }
 
@@ -53,7 +51,10 @@ SYCLExecutionProvider::~SYCLExecutionProvider() {
 
 // Register Allocator
 void SYCLExecutionProvider::RegisterAllocator(shared_ptr<AllocatorManager> allocator_manager) {
+  // GetAllocator requires a device_id (first argument, 0 by default).
+  // Should eventually change later once mapped to an openCL device_id
   auto sycl_alloc = allocator_manager->GetAllocator(0, OrtMemTypeDefault);
+
   if (nullptr == sycl_alloc) {
     sycl_alloc = CreateSYCLAllocator(queue_);
     allocator_manager->InsertAllocator(sycl_alloc);
