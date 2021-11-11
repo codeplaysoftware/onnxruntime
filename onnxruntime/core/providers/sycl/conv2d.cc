@@ -105,7 +105,7 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   const int64_t H_out = y_dims > 2 ? Y->Shape()[2] : 1;
   const int64_t W_out = y_dims > 3 ? Y->Shape()[3] : 1;
 
-  // Bail out early if one of the dimensions is zero.
+  // No work to do hence return OK
   if (Y->Shape().Size() == 0) {
     return Status::OK();
   }
