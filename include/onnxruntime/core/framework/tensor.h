@@ -163,6 +163,17 @@ class Tensor final {
      May return nullptr if tensor size is zero
   */
   template <typename T>
+  T* MutablePtr() {
+    // Type check
+    ORT_ENFORCE(utils::IsPrimitiveDataType<T>(dtype_), "Tensor type mismatch. ",
+                "T ", "!=", dtype_);
+    return reinterpret_cast<T*>(static_cast<char*>(p_data_));
+  }
+
+  /**
+     May return nullptr if tensor size is zero
+  */
+  template <typename T>
   gsl::span<T> MutableDataAsSpan() {
     // Type check
     ORT_ENFORCE(utils::IsPrimitiveDataType<T>(dtype_), "Tensor type mismatch. ",
@@ -177,6 +188,14 @@ class Tensor final {
     ORT_ENFORCE(utils::IsPrimitiveDataType<T>(dtype_), "Tensor type mismatch. ",
                 "T ", "!=", dtype_);
     return reinterpret_cast<const T*>(static_cast<char*>(p_data_) + byte_offset_);
+  }
+
+  template <typename T>
+  const T* Ptr() const {
+    // Type check
+    ORT_ENFORCE(utils::IsPrimitiveDataType<T>(dtype_), "Tensor type mismatch. ",
+                "T ", "!=", dtype_);
+    return reinterpret_cast<const T*>(static_cast<char*>(p_data_));
   }
 
   template <typename T>

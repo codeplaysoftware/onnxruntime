@@ -54,43 +54,30 @@ namespace sycl {
 
 template <typename T>
 Status Relu<T>::ComputeInternal(OpKernelContext* context) const {
-  const Tensor* X1 = context->Input<Tensor>(0);
-  Tensor* Y = context->Output(0, X1->Shape());
-
-  size_t dataSize = Y->SizeInBytes() / sizeof(T);
+  const Tensor* X = context->Input<Tensor>(0);
+  Tensor* Y = context->Output(0, X->Shape());
 
   if (Y->Shape().Size() == 0)
     return Status::OK();
 
-  const T* X1_data = X1->template Data<T>();
-  T* Y_data = Y->template MutableData<T>();
+  // SYCL BUFFERS
+  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
-  // Buffer USM Interop
-  cl::sycl::buffer<T, 1> X1_buffer{X1_data,
-                                   cl::sycl::range<1>{dataSize},
-                                   {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                    cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> Y_buffer{Y_data,
-                                  cl::sycl::range<1>{dataSize},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
+  size_t count = Y_buffer.size();
 
   // SYCL DNN Backend
-  Backend backend{*Queue()};
+  auto queue = *Queue();
+  Backend backend{queue};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
-  //Creating Device Pointers to Buffers
-  auto X1_ = DeviceMem(X1_buffer, 0);  //Offset = 0
-  auto Y_ = DeviceMem(Y_buffer, 0);
+  // Creating Device Pointers to Buffers
+  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
   // Launch Relu kernel
-  snn::pointwise::launch<float, snn::pointwise::Relu, snn::pointwise::Forward>(X1_, Y_, dataSize, backend);
-
-  //Deallocating all the memory elements used
-  backend.template deallocate(X1_);
-  backend.template deallocate(Y_);
+  snn::pointwise::launch<float, snn::pointwise::Relu, snn::pointwise::Forward>(x_data, y_data, count, backend);
 
   return Status::OK();
 }

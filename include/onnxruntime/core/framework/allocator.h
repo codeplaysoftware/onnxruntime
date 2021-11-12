@@ -61,6 +61,11 @@ class IAllocator {
   */
   virtual void* Alloc(size_t size) = 0;
 
+  // Used for specific element type allocation (SYCL Execution Provider Buffer memory for instance)
+  virtual inline void* TypeAlloc(size_t size, int32_t) {
+    return Alloc(size);
+  }
+
   virtual void Free(void* p) = 0;
 
   // TODO: Find a better name than Reserve() and update in all places.

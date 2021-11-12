@@ -208,20 +208,35 @@ inline bool IsDataTypeString(MLDataType dt_type) {
   return (prim_type != nullptr && prim_type->GetDataType() == ONNX_NAMESPACE::TensorProto_DataType_STRING);
 }
 
+template <typename T>
+struct PrimitiveDataType {
+  static inline bool IsPrimitive(MLDataType dt_type) {
+    auto prim_type = dt_type->AsPrimitiveDataType();
+    return (prim_type != nullptr && prim_type->GetDataType() == ONNX_NAMESPACE::TensorProto_DataType_STRING);
+  }
+  static inline bool IsPrimitive(const PrimitiveDataTypeBase* prim_type) {
+    assert(prim_type != nullptr);
+    return prim_type->GetDataType() == ToTensorProtoElementType<T>();
+  }
+};
+
+template <typename T, int dim, typename Alloc, template <typename UT, int Udim, typename UAlloc> class U>
+struct PrimitiveDataType<U<T, dim, Alloc>> {
+  static inline bool IsPrimitive(MLDataType dt_type) {
+    auto prim_type = dt_type->AsPrimitiveDataType();
+    return (prim_type != nullptr && prim_type->GetDataType() == ONNX_NAMESPACE::TensorProto_DataType_STRING);
+  }
+  static inline bool IsPrimitive(const PrimitiveDataTypeBase* prim_type) {
+    assert(prim_type != nullptr);
+    return prim_type->GetDataType() == ToTensorProtoElementType<T>();
+  }
+};
+
 // Test if MLDataType is a concrete type of PrimitiveDataTypeBase
 // and it is T
-template <class T>
-inline bool IsPrimitiveDataType(MLDataType dt_type) {
-  auto prim_type = dt_type->AsPrimitiveDataType();
-  return (prim_type != nullptr && prim_type->GetDataType() == ToTensorProtoElementType<T>());
-}
-
-// Use after AsPrimitiveDataType() is successful
-// Check if PrimitiveDataTypeBase is of type T
-template <class T>
-inline bool IsPrimitiveDataType(const PrimitiveDataTypeBase* prim_type) {
-  assert(prim_type != nullptr);
-  return prim_type->GetDataType() == ToTensorProtoElementType<T>();
+template <class T, class U>
+inline bool IsPrimitiveDataType(U dt_type) {
+  return PrimitiveDataType<T>::IsPrimitive(dt_type);
 }
 
 // This implementation contains a workaround for GCC bug https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47226

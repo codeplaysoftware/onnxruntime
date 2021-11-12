@@ -32,7 +32,7 @@ Tensor::Tensor(MLDataType p_type, const TensorShape& shape, std::shared_ptr<IAll
     if (!IAllocator::CalcMemSizeForArray(SafeInt<size_t>(shape_size), p_type->Size(), &len))
       ORT_THROW("tensor failed memory size calculation");
 
-    p_data = allocator->Alloc(len);
+    p_data = allocator->TypeAlloc(len, p_type->AsPrimitiveDataType()->GetDataType());
   }
 
   Init(p_type, shape, p_data, allocator);

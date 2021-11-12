@@ -56,10 +56,9 @@ namespace sycl {
 
 template <typename T, typename PoolType>
 Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
-  const Tensor* X_data = context->Input<Tensor>(0);
-  const TensorShape& x_shape = X_data->Shape();
-  size_t input_size = X_data->SizeInBytes() / sizeof(T);
-  const int64_t N = X_data->Shape()[0];
+  const Tensor* X = context->Input<Tensor>(0);
+  const TensorShape& x_shape = X->Shape();
+  const int64_t N = x_shape[0];
 
   size_t input_dims = x_shape.NumDimensions();
   ORT_RETURN_IF_NOT(input_dims >= 3, "Input dimension cannot be less than 3.");
@@ -80,8 +79,11 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   std::vector<int64_t> pads = pool_attrs_.pads;
   std::vector<int64_t> output_dims = pool_attrs_.SetOutputSize(x_shape, x_shape[1], &pads);
   TensorShape output_shape(output_dims);
-  Tensor* Y_data = context->Output(0, output_shape);
-  size_t output_size = Y_data->SizeInBytes() / sizeof(T);
+  Tensor* Y = context->Output(0, output_shape);
+
+  // Edge case: one or more dims with value of 0
+  if (output_shape.Size() == 0)
+    return Status::OK();
 
   const int64_t H_out = output_dims.size() > 2 ? output_shape[2] : 1;
   const int64_t W_out = output_dims.size() > 3 ? output_shape[3] : 1;
@@ -107,41 +109,27 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   params.pad_rows = pool_attrs_.global_pooling ? 0 : static_cast<int>(pool_attrs_.pads[0]);
   params.pad_cols = pool_attrs_.global_pooling ? 0 : static_cast<int>(pool_attrs_.pads[pool_attrs_.pads.size() - 1]);
 
-  // edge case: one or more dims with value of 0
-  if (output_shape.Size() == 0)
-    return Status::OK();
-
-  const T* X_ptr = X_data->template Data<T>();
-  T* Y_ptr = Y_data->template MutableData<T>();
-
-  // Buffer USM Interop
-  cl::sycl::buffer<T, 1> X_buffer{X_ptr,
-                                  cl::sycl::range<1>{input_size},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> Y_buffer{Y_ptr,
-                                  cl::sycl::range<1>{output_size},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
+  // SYCL BUFFERS
+  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
   Backend backend{*Queue()};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
-  //Creating Device Pointers to Buffers
-  auto X_ = DeviceMem(X_buffer, 0);
-  auto Y_ = DeviceMem(Y_buffer, 0);
+  // Creating Device Pointers to Buffers
+  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  //Allocating Intermediate Memory to perform computations in NHWC format through SYCL-DNN
+  // Allocating Intermediate Memory to perform computations in NHWC format through SYCL-DNN
   DeviceMem input, output;
   input = backend.template allocate<T>(static_cast<size_t>(N * C * H_in * W_in));
   output = backend.template allocate<T>(static_cast<size_t>(N * C * H_out * W_out));
 
-  //Performing input conversion from NCHW to NHWC
+  // Performing input conversion from NCHW to NHWC
   const std::vector<int> input_sizes = {(int)N, (int)C, (int)H_in, (int)W_in};
-  snn::transpose::convert_nchw_to_nhwc<T, Backend>(X_, input, input_sizes, backend);
+  snn::transpose::convert_nchw_to_nhwc<T, Backend>(x_data, input, input_sizes, backend);
 
   // Launch Pooling kernel
   if constexpr (PoolType::type == onnxruntime::PoolType::kAveragePool) {
@@ -152,15 +140,9 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
         input, output, params, backend);
   }
 
-  //Reverting the output back to NCHW layout
+  // Reverting the output back to NCHW layout
   const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out, (int)C};
-  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, output_sizes, backend);
-
-  //Deallocating all the memory elements used
-  backend.template deallocate(input);
-  backend.template deallocate(output);
-  backend.template deallocate(X_);
-  backend.template deallocate(Y_);
+  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes, backend);
 
   return Status::OK();
 }

@@ -20,7 +20,6 @@
 #include <CL/sycl.hpp>
 
 #include "sycldnn/backend/sycl_blas_backend.h"
-#include "sycldnn/bias/launch.h"
 #include "sycldnn/status.h"
 
 namespace snn = sycldnn;
@@ -73,80 +72,87 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
   // OUTPUT
   Tensor* Y = context->Output(0, {M, N});
 
-  const T* X_data = X->template Data<T>();
-  const T* W_data = W->template Data<T>();
-  T* Y_data = Y->template MutableData<T>();
-
-  // Buffer USM Interop
-  cl::sycl::buffer<T, 1> X_buffer{X_data,
-                                  cl::sycl::range<1>{static_cast<size_t>(M * K)},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> W_buffer{W_data,
-                                  cl::sycl::range<1>{static_cast<size_t>(K * N)},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> Y_buffer{Y_data,
-                                  cl::sycl::range<1>{static_cast<size_t>(M * N)},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
+  // SYCL BUFFERS
+  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> W_buffer = *W->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
-  Backend backend{*Queue()};
+  auto queue = *Queue();
+  Backend backend{queue};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
-  //Creating Device Pointers to Buffers
-  auto X_ = DeviceMem(X_buffer, 0);  //Offset = 0
-  auto W_ = DeviceMem(W_buffer, 0);
-  auto Y_ = DeviceMem(Y_buffer, 0);
+  // Creating Device Pointers to Buffers
+  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  auto w_data = DeviceMem(W_buffer, static_cast<size_t>(W->ByteOffset() / sizeof(T)));
+  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
+
+  // Check if Bias Addition is required
+  if (beta_ != 0 && B != nullptr) {
+    cl::sycl::buffer<T, 1>* B_buffer = const_cast<cl::sycl::buffer<T, 1>*>(B->template Ptr<cl::sycl::buffer<T, 1>>());
+    const TensorShape& b_shape = B->Shape();
+    auto b_data = DeviceMem(*B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
+
+    if (b_shape.Size() == 1) {
+      // do a cgh.fill()
+      auto event = queue.submit([&](cl::sycl::handler& cgh) {
+        auto in_acc = B_buffer->template get_access<cl::sycl::access::mode::read>(cgh);
+        auto out_acc = Y_buffer.template get_access<cl::sycl::access::mode::discard_write>(cgh);
+        cgh.fill(out_acc, in_acc[0]);
+      });
+
+    } else if (b_shape.NumDimensions() == 2 || b_shape[1] == 1) {
+      // call SYCL-BLAS gemm
+      // B(M,1)*ones(1,N)
+      // TODO: We need to add Broadcast in SYCL-DNN to remove this slow Matmul
+      auto ones = backend.template allocate<T>(static_cast<size_t>(N));
+      auto event = queue.submit([&](cl::sycl::handler& cgh) {
+        auto buf = ones.get_buffer();
+        auto out_acc = buf.template get_access<cl::sycl::access::mode::discard_write>(cgh);
+        cgh.fill(out_acc, 1.f);
+      });
+
+      backend.template matmul<false, false, T, int>(b_data, ones, y_data, 0.f, M, 1, N);
+
+    } else if (b_shape.NumDimensions() == 1 || b_shape[0] == 1) {
+      // call SYCL-BLAS gemm
+      // B(1,N)*ones(M,1)
+      // TODO: We need to add Broadcast in SYCL-DNN to remove this slow Matmul
+      auto ones = backend.template allocate<T>(static_cast<size_t>(M));
+      auto event = queue.submit([&](cl::sycl::handler& cgh) {
+        auto buf = ones.get_buffer();
+        auto out_acc = buf.template get_access<cl::sycl::access::mode::discard_write>(cgh);
+        cgh.fill(out_acc, 1.f);
+      });
+
+      backend.template matmul<false, false, T, int>(ones, b_data, y_data, 0.f, M, 1, N);
+
+    } else {
+      // TODO : Copy operation to be removed for performance considerations
+      // This is a temporary work-around until a SYCL DNN proper operation is implemented
+      // which takes the bias B as a separate input rather than expecting it to be filled 
+      // in advance into the output Y 
+      auto data_transfer = this->GetDataTransfer();
+      data_transfer->CopyTensor(*B, *Y);
+    }
+  }
 
   auto executor = backend.get_executor();
 
-  //Switch M and N to meet SYCL-BLAS requirements
+  // Switch M and N to meet SYCL-BLAS requirements
   auto trans_m = N;
   auto trans_n = M;
 
-  //Compute ld dimension based on transpose parameters
+  // Compute ld dimension based on transpose parameters
   auto ldc = trans_m;
   auto lda = trans_B_ ? K : trans_m;
   auto ldb = trans_A_ ? trans_n : K;
 
-  //Launching SYCL-BLAS Gemm
+  // Launching SYCL-BLAS Gemm
   blas::_gemm(executor, trans_B_ ? 't' : 'n',
               trans_A_ ? 't' : 'n', trans_m, trans_n, K,
-              alpha_, W_, lda, X_, ldb, beta_, Y_, ldc);
-
-  //Check if Bias Addition is required
-  if (nullptr != B) {
-    const T* Bdata = B->template Data<T>();
-    cl::sycl::buffer<T, 1> B_buffer{Bdata,
-                                    cl::sycl::range<1>{static_cast<size_t>(M * N)},
-                                    {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                     cl::sycl::property::buffer::use_host_ptr{}}};
-    auto B_ = DeviceMem{B_buffer, 0};
-
-    //Settubg Bias parameters
-    snn::bias::BiasParams bias_params;
-    bias_params.in_rows = 1;
-    bias_params.in_cols = 1;
-    bias_params.batch = 1;
-    bias_params.channels = M * N;
-    bias_params.bias = M * N;
-
-    //Launching Bias addition kernel
-    snn::bias::launch<T>(Y_, B_, Y_, bias_params, backend);
-
-    //Deallocating the Bias device pointer
-    backend.template deallocate(B_);
-  }
-
-  //Deallocating all the memory elements used
-  backend.template deallocate(X_);
-  backend.template deallocate(W_);
-  backend.template deallocate(Y_);
+              alpha_, w_data, lda, x_data, ldb, beta_, y_data, ldc);
 
   return Status::OK();
 }

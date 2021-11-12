@@ -54,83 +54,64 @@ namespace sycl {
 
 template <typename T>
 Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
-  const Tensor* input_tensor = context->Input<Tensor>(0);
-  Tensor* output_tensor = context->Output(0, input_tensor->Shape());
+  const Tensor* X = context->Input<Tensor>(0);
+  Tensor* Y = context->Output(0, X->Shape());
 
-  if (output_tensor->Shape().Size() == 0) {
+  if (Y->Shape().Size() == 0) {
     return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Invalid Output Dimensions");
   }
 
-  const int64_t N = input_tensor->Shape()[0];
-  const int64_t C = input_tensor->Shape().NumDimensions() > 1 ? input_tensor->Shape()[1] : 1;
-  const int64_t H = input_tensor->Shape().NumDimensions() > 2 ? input_tensor->Shape()[2] : 1;
-  const int64_t W = input_tensor->Shape().NumDimensions() > 3 ? input_tensor->Shape()[3] : 1;
+  const int64_t N = X->Shape()[0];
+  const int64_t C = X->Shape().NumDimensions() > 1 ? X->Shape()[1] : 1;
+  const int64_t H = X->Shape().NumDimensions() > 2 ? X->Shape()[2] : 1;
+  const int64_t W = X->Shape().NumDimensions() > 3 ? X->Shape()[3] : 1;
 
   bool is_transpose_required = H * W > 1;
 
-  const T* input_data = input_tensor->template Data<T>();
-  T* output_data = output_tensor->template MutableData<T>();
-
-  // Buffer USM Interop
-  cl::sycl::buffer<T, 1> input_buffer{input_data,
-                                      cl::sycl::range<1>{static_cast<size_t>(N * H * W * C)},
-                                      {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                       cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> output_buffer{output_data,
-                                       cl::sycl::range<1>{static_cast<size_t>(N * H * W * C)},
-                                       {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                        cl::sycl::property::buffer::use_host_ptr{}}};
+  // SYCL BUFFERS
+  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
   Backend backend{*Queue()};
 
   using DeviceMem = typename Backend::template internal_pointer_type<T>;
 
-  //Creating Device Pointers to Buffers
-  auto X_ = DeviceMem(input_buffer, 0);
-  auto Y_ = DeviceMem(output_buffer, 0);
+  // Creating Device Pointers to Buffers
+  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  DeviceMem input_, output_;
+  DeviceMem input, output;
   if (is_transpose_required) {
-    input_ = backend.template allocate<T>(static_cast<size_t>(N * H * W * C));
-    output_ = backend.template allocate<T>(static_cast<size_t>(N * H * W * C));
+    input = backend.template allocate<T>(static_cast<size_t>(N * H * W * C));
+    output = backend.template allocate<T>(static_cast<size_t>(N * H * W * C));
 
-    //Performing input conversion from NCHW to NHWC
+    // Performing input conversion from NCHW to NHWC
     const std::vector<int> input_sizes = {(int)N, (int)C, (int)H, (int)W};
-    snn::transpose::convert_nchw_to_nhwc<T, Backend>(X_, input_, input_sizes, backend);
+    snn::transpose::convert_nchw_to_nhwc<T, Backend>(x_data, input, input_sizes, backend);
   } else {
-    input_ = X_;
-    output_ = Y_;
+    input = x_data;
+    output = y_data;
   }
 
-  //Allocating Workspace Memory
+  // Allocating Workspace Memory
   DeviceMem workspace = backend.template allocate<T>(static_cast<size_t>(N * H * W));
 
-  //Setting Softmax parameters
+  // Setting Softmax parameters
   snn::softmax::SoftmaxParams params;
   params.channels = static_cast<int>(C);
   params.batch = static_cast<int>(N);
   params.rows = static_cast<int>(H);
   params.cols = static_cast<int>(W);
 
-  //Launching softmax kernel
-  snn::softmax::launch_forward<T, snn::softmax::Softmax>(input_, workspace, output_, params, backend);
+  // Launching softmax kernel
+  snn::softmax::launch_forward<T, snn::softmax::Softmax>(input, workspace, output, params, backend);
 
   if (is_transpose_required) {
-    //Reverting the output back to NCHW layout
+    // Reverting the output back to NCHW layout
     const std::vector<int> output_sizes = {(int)N, (int)H, (int)W, (int)C};
-    snn::transpose::convert_nhwc_to_nchw<T, Backend>(output_, Y_, output_sizes, backend);
-
-    //Deallocating the device memory pointers
-    backend.template deallocate(input_);
-    backend.template deallocate(output_);
+    snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes, backend);
   }
-
-  //Deallocating all the memory elements used
-  backend.template deallocate(workspace);
-  backend.template deallocate(X_);
-  backend.template deallocate(Y_);
 
   return Status::OK();
 }

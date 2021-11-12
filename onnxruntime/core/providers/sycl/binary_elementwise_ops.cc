@@ -55,22 +55,17 @@ namespace sycl {
 
 template <typename T>
 Status Add<T>::ComputeInternal(OpKernelContext* context) const {
-  const Tensor* X1 = context->Input<Tensor>(0);
-  const Tensor* X2 = context->Input<Tensor>(1);
+  const Tensor* A = context->Input<Tensor>(0);
+  const Tensor* B = context->Input<Tensor>(1);
 
-  Tensor* Y = context->Output(0, X1->Shape());
+  Tensor* Y = context->Output(0, A->Shape());
 
-  const T* X1_data = X1->template Data<T>();
-  const T* X2_data = X2->template Data<T>();
-  T* Y_data = Y->template MutableData<T>();
+  // SYCL BUFFERS
+  const cl::sycl::buffer<T, 1> A_buffer = *A->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1>* B_buffer = const_cast<cl::sycl::buffer<float, 1>*>(B->template Ptr<cl::sycl::buffer<T, 1>>());
+  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
-  size_t dataSize = Y->SizeInBytes() / sizeof(T);
-
-  // Buffer USM Interop
-  cl::sycl::buffer<T, 1> X1_buffer{X1_data,
-                                   cl::sycl::range<1>{dataSize},
-                                   {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                    cl::sycl::property::buffer::use_host_ptr{}}};
+  size_t count = A_buffer.size();  // Had to use .size() because of SYCL2020;
 
   // SYCL DNN Backend
   auto queue = *Queue();
@@ -78,34 +73,24 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
-  //Creating Device Pointers to Buffers
-  auto X1_ = DeviceMem(X1_buffer, 0);
+  // Creating Device Pointers to Buffers
+  auto a_data = DeviceMem(A_buffer, static_cast<size_t>(A->ByteOffset() / sizeof(T)));
 
-  //Allocating Intermediate Memory to copy 2nd input buffer
-  DeviceMem input = backend.template allocate<T>(dataSize);
-
-  //Copying contents of 2nd input to intermediate memory
-  auto event = queue.submit([&](cl::sycl::handler& cgh) {
-    auto buf = input.get_buffer();
-    auto acc = buf.template get_access<cl::sycl::access::mode::discard_write>(cgh);
-    cgh.copy(X2_data, acc);
+  // Copying contents of 2nd input to output memory
+  // TODO : Copy operation to be removed for performance considerations
+  // This is a temporary work-around until a proper SYCL DNN pointwise op is implemented
+  // which takes both A and B const inputs and writes directly to the output Y
+  queue.submit([&](cl::sycl::handler& cgh) {
+    auto in_acc = B_buffer->template get_access<cl::sycl::access::mode::read>(cgh);
+    auto out_acc = Y_buffer.template get_access<cl::sycl::access::mode::discard_write>(cgh);
+    cgh.copy(in_acc, out_acc);
   });
-  event.wait_and_throw();
 
-  //Launching add kernel
-  snn::pointwise::launch<T, snn::pointwise::ResidualAdd, snn::pointwise::Forward, Backend>(X1_, input, dataSize, backend);
+  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  //Copying output data back to the node's output
-  event = queue.submit([&](cl::sycl::handler& cgh) {
-    auto buf = input.get_buffer();
-    auto acc = buf.template get_access<cl::sycl::access::mode::read>(cgh);
-    cgh.copy(acc, Y_data);
-  });
-  event.wait_and_throw();
-
-  //Deallocating all the memory elements used
-  backend.template deallocate(X1_);
-  backend.template deallocate(input);
+  // Launching add kernel
+  // TODO: Add binary operation in SYCL-DNN to manage the ResidualAdd operation
+  snn::pointwise::launch<T, snn::pointwise::ResidualAdd, snn::pointwise::Forward, Backend>(a_data, y_data, count, backend);
 
   return Status::OK();
 }
