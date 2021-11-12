@@ -54,11 +54,11 @@ namespace sycl {
 
 template <typename T>
 Status MatMul<T>::ComputeInternal(OpKernelContext* context) const {
-  const Tensor* X1 = context->Input<Tensor>(0);
-  const Tensor* X2 = context->Input<Tensor>(1);
+  const Tensor* A = context->Input<Tensor>(0);
+  const Tensor* B = context->Input<Tensor>(1);
 
   MatMulComputeHelper helper;
-  ORT_RETURN_IF_ERROR(helper.Compute(X1->Shape(), X2->Shape()));
+  ORT_RETURN_IF_ERROR(helper.Compute(A->Shape(), B->Shape()));
 
   Tensor* Y = context->Output(0, helper.OutputShape());
 
@@ -69,47 +69,24 @@ Status MatMul<T>::ComputeInternal(OpKernelContext* context) const {
   const size_t N = static_cast<size_t>(helper.N());
   const size_t K = static_cast<size_t>(helper.K());
 
-  const T* X1_data = X1->template Data<T>();
-  const T* X2_data = X2->template Data<T>();
-  T* Y_data = Y->template MutableData<T>();
-
-  size_t X1_size = X1->SizeInBytes() / sizeof(T);
-  size_t X2_size = X2->SizeInBytes() / sizeof(T);
-  size_t Y_size = Y->SizeInBytes() / sizeof(T);
-
-  // Buffer USM Interop
-  cl::sycl::buffer<T, 1> X1_buffer{X1_data,
-                                   cl::sycl::range<1>{X1_size},
-                                   {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                    cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> X2_buffer{X2_data,
-                                   cl::sycl::range<1>{X2_size},
-                                   {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                    cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> Y_buffer{Y_data,
-                                  cl::sycl::range<1>{Y_size},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
+  // SYCL BUFFERS
+  const cl::sycl::buffer<T, 1> A_buffer = *A->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> B_buffer = *B->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
-  Backend backend{*Queue()};
+  auto queue = *Queue();
+  Backend backend{queue};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
-  //Creating Device Pointers to Buffers
-  auto X1_ = DeviceMem(X1_buffer, 0);  //Offset = 0
-  auto X2_ = DeviceMem(X2_buffer, 0);
-  auto Y_ = DeviceMem(Y_buffer, 0);
+  // Creating Device Pointers to Buffers
+  auto a_data = DeviceMem(A_buffer, static_cast<size_t>(A->ByteOffset() / sizeof(T)));
+  auto b_data = DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
+  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  //Launching Matmul kernel
-  backend.template matmul<false, false, T, int>(X1_, X2_, Y_, 0.f, M, K, N);
-
-  //Deallocating all the memory elements used
-  backend.template deallocate(X1_);
-  backend.template deallocate(X2_);
-  backend.template deallocate(Y_);
+  // Launching Matmul kernel
+  backend.template matmul<false, false, T, int>(a_data, b_data, y_data, 0.f, M, K, N);
 
   return Status::OK();
 }

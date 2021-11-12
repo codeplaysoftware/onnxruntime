@@ -28,7 +28,7 @@ class SYCLAllocator : public IAllocator {
  public:
   SYCLAllocator(std::shared_ptr<cl::sycl::queue> q) : IAllocator(OrtMemoryInfo("sycl",
                                                                                OrtAllocatorType::OrtDeviceAllocator,
-                                                                               OrtDevice(q->get_device().is_cpu() ? OrtDevice::CPU : OrtDevice::GPU,
+                                                                               OrtDevice(OrtDevice::GPU,
                                                                                          OrtDevice::MemType::DEFAULT,
                                                                                          0),
                                                                                0,
@@ -36,8 +36,9 @@ class SYCLAllocator : public IAllocator {
                                                       q_{q} {
   }
 
-  void* Alloc(size_t size) override;
-  void Free(void* p) override;
+  void* Alloc(size_t) override;
+  void Free(void*) override;
+  void* TypeAlloc(size_t, int32_t) override;
 
  private:
   std::shared_ptr<cl::sycl::queue> q_;

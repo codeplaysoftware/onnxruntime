@@ -15,24 +15,56 @@
  */
 
 #include "sycl_allocator.h"
+#include "core/framework/data_types.h"
 #include "core/framework/allocatormgr.h"
 #include <CL/sycl.hpp>
 
 namespace onnxruntime {
 
-void* SYCLAllocator::Alloc(size_t size) {
-  void* p = nullptr;
+namespace sycl {
+
+template <typename T>
+inline void* SyclAlloc(size_t size, std::shared_ptr<cl::sycl::queue> q_) {
+  cl::sycl::buffer<T, 1>* X_buffer;
   if (size > 0) {
-    p = cl::sycl::malloc_device(size, *q_.get(), cl::sycl::property_list{});
-    // FIXME: do this only for outputs
-    q_->memset(p, int{0}, size).wait();
+    X_buffer = new cl::sycl::buffer<T, 1>{
+        cl::sycl::range<1>{size / sizeof(T)},
+        {cl::sycl::property::buffer::context_bound{q_->get_context()}}};
   }
   LOGS_DEFAULT(INFO) << "Memory allocated with SYCL [ " << size << " bytes ]";
-  return p;
+  return reinterpret_cast<void*>(X_buffer);
+}
+}  // namespace sycl
+
+void* SYCLAllocator::Alloc(size_t size) {
+  auto type = ONNX_NAMESPACE::TensorProto_DataType_UINT8;
+  return TypeAlloc(size, type);
+}
+
+void* SYCLAllocator::TypeAlloc(size_t size, int32_t dtype) {
+  switch (dtype) {
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
+      return sycl::SyclAlloc<float>(size, q_);
+      break;
+    case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE:
+      return sycl::SyclAlloc<double>(size, q_);
+      break;
+    case ONNX_NAMESPACE::TensorProto_DataType_INT8:
+      return sycl::SyclAlloc<int8_t>(size, q_);
+      break;
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
+      return sycl::SyclAlloc<uint8_t>(size, q_);
+      break;
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
+      return sycl::SyclAlloc<cl::sycl::half>(size, q_);
+      break;
+    default:
+      ORT_THROW("Unexpected data type");
+  }
 }
 
 void SYCLAllocator::Free(void* p) {
   LOGS_DEFAULT(INFO) << "Memory freed with SYCL";
-  cl::sycl::free(p, *q_.get());
+  delete reinterpret_cast<cl::sycl::buffer<uint8_t, 1>*>(p);
 }
 }  // namespace onnxruntime

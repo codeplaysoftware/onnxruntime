@@ -66,7 +66,7 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   Tensor* Y = context->Output(0, x_shape);
 
   ORT_RETURN_IF_ERROR(BatchNormHelper::ValidateInputs(X, scale, B, mean, var, spatial_ == 1));
-  //Training mode not supported
+  // Training mode not supported
   if (is_training_mode_ == 1) {
     return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "BatchNormalization Training mode not supported with SYCL EP");
   }
@@ -77,44 +77,13 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   const int64_t H = input_dims > 2 ? x_shape[2] : 1;
   const int64_t W = input_dims > 3 ? x_shape[3] : 1;
 
-  // RAW DATA PTRs
-  const T* Xdata = X->template Data<T>();
-  const T* scaledata = scale->template Data<T>();
-  const T* Bdata = B->template Data<T>();
-  const T* meandata = mean->template Data<T>();
-  const T* vardata = var->template Data<T>();
-  T* Ydata = Y->template MutableData<T>();
-
-  // Buffer USM Interop
-  cl::sycl::buffer<T, 1> X_buffer{Xdata,
-                                  cl::sycl::range<1>{static_cast<size_t>(N * C * H * W)},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> scale_buffer{scaledata,
-                                      cl::sycl::range<1>{static_cast<size_t>(C)},
-                                      {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                       cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> B_buffer{Bdata,
-                                  cl::sycl::range<1>{static_cast<size_t>(C)},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> mean_buffer{meandata,
-                                     cl::sycl::range<1>{static_cast<size_t>(C)},
-                                     {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                      cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> var_buffer{vardata,
-                                    cl::sycl::range<1>{static_cast<size_t>(C)},
-                                    {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                     cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> Y_buffer{Ydata,
-                                  cl::sycl::range<1>{static_cast<size_t>(N * C * H * W)},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
+  // SYCL BUFFERS
+  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> scale_buffer = *scale->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> B_buffer = *B->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> mean_buffer = *mean->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> var_buffer = *var->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
   auto queue = *Queue();
@@ -122,24 +91,24 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
-  //Creating Device Pointers to Buffers
-  auto X_ = DeviceMem(X_buffer, 0);
-  auto scale_ = DeviceMem(scale_buffer, 0);
-  auto B_ = DeviceMem(B_buffer, 0);
-  auto mean_ = DeviceMem(mean_buffer, 0);
-  auto var_ = DeviceMem(var_buffer, 0);
-  auto Y_ = DeviceMem(Y_buffer, 0);
+  // Creating Device Pointers to Buffers
+  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  auto scale_data = DeviceMem(scale_buffer, static_cast<size_t>(scale->ByteOffset() / sizeof(T)));
+  auto b_data = DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
+  auto mean_data = DeviceMem(mean_buffer, static_cast<size_t>(mean->ByteOffset() / sizeof(T)));
+  auto var_data = DeviceMem(var_buffer, static_cast<size_t>(var->ByteOffset() / sizeof(T)));
+  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  //Allocating Intermediate Memory to perform computations in NHWC format through SYCL-DNN
+  // Allocating Intermediate Memory to perform computations in NHWC format through SYCL-DNN
   DeviceMem input, output;
   input = backend.template allocate<T>(static_cast<size_t>(N * C * H * W));
   output = backend.template allocate<T>(static_cast<size_t>(N * C * H * W));
 
-  //Performing input conversion from NCHW to NHWC
+  // Performing input conversion from NCHW to NHWC
   const std::vector<int> input_sizes = {(int)N, (int)C, (int)H, (int)W};
-  snn::transpose::convert_nchw_to_nhwc<T, Backend>(X_, input, input_sizes, backend);
+  snn::transpose::convert_nchw_to_nhwc<T, Backend>(x_data, input, input_sizes, backend);
 
-  //Setting Batchnorm parameters
+  // Setting Batchnorm parameters
   snn::batchnorm::BatchNormParams params;
   params.batch = static_cast<int>(N);
   params.rows = static_cast<int>(H);
@@ -147,22 +116,12 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   params.channels = static_cast<int>(C);
   params.epsilon = epsilon_;
 
-  //Launching Batchnorm kernel
-  snn::batchnorm::launch<T, Backend, snn::batchnorm::Inference>(input, B_, scale_, mean_, var_, output, params, backend);
+  // Launching Batchnorm kernel
+  snn::batchnorm::launch<T, Backend, snn::batchnorm::Inference>(input, b_data, scale_data, mean_data, var_data, output, params, backend);
 
-  //Reverting the output back to NCHW layout
+  // Reverting the output back to NCHW layout
   const std::vector<int> output_sizes = {(int)N, (int)H, (int)W, (int)C};
-  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, output_sizes, backend);
-
-  //Deallocating all the memory elements used
-  backend.template deallocate(X_);
-  backend.template deallocate(scale_);
-  backend.template deallocate(B_);
-  backend.template deallocate(mean_);
-  backend.template deallocate(var_);
-  backend.template deallocate(input);
-  backend.template deallocate(output);
-  backend.template deallocate(Y_);
+  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes, backend);
 
   return Status::OK();
 }

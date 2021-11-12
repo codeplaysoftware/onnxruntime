@@ -52,14 +52,14 @@ Status Dropout::ComputeInternal(OpKernelContext* context) const {
   if (X == nullptr)
     return Status(common::ONNXRUNTIME, common::FAIL, "X Input is not available.");
 
-  const TensorShape& X_shape = X->Shape();
-  const int64_t N = X_shape.Size();
+  const TensorShape& x_shape = X->Shape();
+  const int64_t N = x_shape.Size();
 
   //Get Y_data
-  auto Y = context->Output(0, X_shape);
+  auto Y = context->Output(0, x_shape);
 
   //Get mask_data
-  auto mask = context->Output(1, X_shape);
+  auto mask = context->Output(1, x_shape);
 
   ORT_ENFORCE(Y != nullptr);
 
@@ -71,7 +71,7 @@ Status Dropout::ComputeInternal(OpKernelContext* context) const {
 
   const Tensor* training_mode = context->Input<Tensor>(2);
   //Check for inference mode.
-  if ((0 == ratio_data) || (training_mode == nullptr || *(training_mode->Data<bool>()) == false)) {
+  if ((0 == ratio_data) || (training_mode == nullptr || *(training_mode->Ptr<bool>()) == false)) {
     const void* source = X->DataRaw();
     void* target = Y->MutableDataRaw();
 

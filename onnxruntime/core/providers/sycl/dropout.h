@@ -27,7 +27,7 @@ namespace sycl {
 template <typename T>
 struct GetRatioDataImpl {
   void operator()(const Tensor* ratio, float& ratio_data) const {
-    ratio_data = static_cast<float>(*(ratio->template Data<T>()));
+    ratio_data = static_cast<float>(*(ratio->template Ptr<T>()));
     ORT_ENFORCE(ratio_data >= 0.0f && ratio_data < 1.0f, "ratio_data is outside range [0, 1)");
   }
 };
@@ -42,7 +42,7 @@ float GetRatioOrDefault(const Tensor* ratio_tensor) {
 #ifdef _WIN32
 #pragma warning(disable : 4244)
 #endif
-    const float ratio_value = *ratio_tensor->Data<T2>();
+    const float ratio_value = *ratio_tensor->Ptr<T2>();
     ORT_ENFORCE(0.0f <= ratio_value && ratio_value < 1.0f, "ratio must be in the range [0, 1)");
     return ratio_value;
   }

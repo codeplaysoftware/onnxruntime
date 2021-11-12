@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "core/providers/sycl/conv2d.h"
+#include "core/providers/sycl/conv.h"
 
 #include <CL/sycl.hpp>
 
@@ -101,35 +101,19 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   Tensor* Y = context->Output(0, Y_dims);
   TensorShape output_shape = Y->Shape().Slice(2);
 
-  size_t y_dims = Y->Shape().NumDimensions();
-  const int64_t H_out = y_dims > 2 ? Y->Shape()[2] : 1;
-  const int64_t W_out = y_dims > 3 ? Y->Shape()[3] : 1;
-
-  // No work to do hence return OK
+  // Bail out early if one of the dimensions is zero.
   if (Y->Shape().Size() == 0) {
     return Status::OK();
   }
 
-  // RAW DATA PTRs
-  const T* Xdata = X->template Data<T>();
-  const T* Wdata = W->template Data<T>();
-  T* Ydata = Y->template MutableData<T>();
+  size_t y_dims = Y->Shape().NumDimensions();
+  const int64_t H_out = y_dims > 2 ? Y->Shape()[2] : 1;
+  const int64_t W_out = y_dims > 3 ? Y->Shape()[3] : 1;
 
-  // Buffer USM Interop
-  cl::sycl::buffer<T, 1> X_buffer{Xdata,
-                                  cl::sycl::range<1>{static_cast<size_t>(N * C * H_in * W_in)},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> W_buffer{Wdata,
-                                  cl::sycl::range<1>{static_cast<size_t>(M * C * R * S)},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
-
-  cl::sycl::buffer<T, 1> Y_buffer{Ydata,
-                                  cl::sycl::range<1>{static_cast<size_t>(N * M * H_out * W_out)},
-                                  {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                   cl::sycl::property::buffer::use_host_ptr{}}};
+  // SYCL BUFFERS
+  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> W_buffer = *W->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
   auto queue = *Queue();
@@ -137,18 +121,18 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
-  //Creating a Conv selector instance
+  // Creating a Conv selector instance
   auto selector = snn::conv2d::get_default_selector(queue.get_device());
 
-  //Creating Device Pointers to Buffers
-  auto X_ = DeviceMem{X_buffer, 0};  //Offset = 0
-  auto W_ = DeviceMem{W_buffer, 0};
-  auto Y_ = DeviceMem{Y_buffer, 0};
+  // Creating Device Pointers to Buffers
+  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  auto w_data = DeviceMem(W_buffer, static_cast<size_t>(W->ByteOffset() / sizeof(T)));
+  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  //First transpose the input feature map and filter weights to
-  //the desired data layout
+  // First transpose the input feature map and filter weights to
+  // the desired data layout
 
-  //Allocating Intermediate Memory and Workspace Memory to perform computations in NHWC format through SYCL-DNN
+  // Allocating Intermediate Memory and Workspace Memory to perform computations in NHWC format through SYCL-DNN
   DeviceMem input, weights, output, workspace;
   input = backend.template allocate<T>(static_cast<size_t>(N * C * H_in * W_in));
   weights = backend.template allocate<T>(static_cast<size_t>(M * C * R * S));
@@ -157,13 +141,13 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   const std::vector<int> weight_sizes = {(int)M, (int)C, (int)R, (int)S};
   const std::vector<int> weight_permutations = {2, 3, 1, 0};
 
-  //Performing input conversion from NCHW to NHWC for feature map
-  snn::transpose::convert_nchw_to_nhwc<T, Backend>(X_, input, input_sizes, backend);
+  // Performing input conversion from NCHW to NHWC for feature map
+  snn::transpose::convert_nchw_to_nhwc<T, Backend>(x_data, input, input_sizes, backend);
 
-  //Performing conversion from MCHW to HWCM for weights
-  snn::transpose::launch<T, Backend>(W_, weights, weight_sizes, weight_permutations, backend);
+  // Performing conversion from MCHW to HWCM for weights
+  snn::transpose::launch<T, Backend>(w_data, weights, weight_sizes, weight_permutations, backend);
 
-  //Setting Conv parameters
+  // Setting Conv parameters
   snn::conv2d::Conv2DParams params;
   params.channels = static_cast<int>(C);
   params.features = static_cast<int>(M);
@@ -197,12 +181,8 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
 
   //Check if Bias Addition is required
   if (nullptr != B) {
-    const T* Bdata = B->template Data<T>();
-    cl::sycl::buffer<T, 1> B_buffer{Bdata,
-                                    cl::sycl::range<1>{static_cast<size_t>(M)},
-                                    {cl::sycl::property::buffer::context_bound{Queue()->get_context()},
-                                     cl::sycl::property::buffer::use_host_ptr{}}};
-    auto B_ = DeviceMem(B_buffer, 0);
+    const cl::sycl::buffer<T, 1> B_buffer = *B->template Ptr<cl::sycl::buffer<T, 1>>();
+    auto b_data = DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
 
     //Settubg Bias parameters
     snn::bias::BiasParams bias_params;
@@ -212,26 +192,13 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
     bias_params.channels = static_cast<int>(M);
     bias_params.bias = static_cast<int>(M);
 
-    //Launching Bias addition kernel
-    snn::bias::launch<T>(output, B_, output, bias_params, backend);
-
-    //Deallocating the Bias device pointer
-    backend.template deallocate(B_);
+    // Launching Bias addition kernel
+    snn::bias::launch<T>(output, b_data, output, bias_params, backend);
   }
 
-  //Reverting the output back to NCHW layout
+  // Reverting the output back to NCHW layout
   const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out, (int)M};
-  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, Y_, output_sizes, backend);
-
-  //Deallocating all the memory elements used
-  backend.template deallocate(input);
-  backend.template deallocate(weights);
-  backend.template deallocate(workspace);
-  backend.template deallocate(output);
-
-  backend.template deallocate(X_);
-  backend.template deallocate(W_);
-  backend.template deallocate(Y_);
+  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes, backend);
 
   return Status::OK();
 }
