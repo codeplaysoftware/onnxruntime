@@ -54,7 +54,7 @@ TEST(SoftmaxOperator, LargeNumber) {
   std::vector<float> expected_vals = {0.0320586f, 0.08714432f, 0.23688284f, 0.64391428f, 0.0320586f, 0.08714432f, 0.23688284f, 0.64391428f};
   std::vector<int64_t> dimensions = {2, 4};
 
-  RunTest(x_vals, expected_vals, dimensions);
+  RunTest(x_vals, expected_vals, dimensions, /*opset*/ 7, /*axis*/ 1, {kSyclExecutionProvider});
 }
 
 //np.random.seed(123)   # Use a seed so we can replicate the input and expected values here and in python

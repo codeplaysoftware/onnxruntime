@@ -18,6 +18,7 @@
 #include "core/framework/data_types_internal.h"
 #include "core/framework/op_kernel.h"
 #include "core/providers/sycl/sycl_fwd.h"
+#include "core/providers/common.h"
 
 namespace onnxruntime {
 namespace sycl {
@@ -25,9 +26,29 @@ namespace sycl {
 template <typename T>
 class Softmax final : public SyclKernel {
  public:
-  Softmax(const OpKernelInfo& info) : SyclKernel(info) {}
+  Softmax(const OpKernelInfo& info) : SyclKernel(info) {
+    const auto& node = info.node();
+    opset_ = node.SinceVersion();
+
+    int64_t axis;
+    Status status = info.GetAttr<int64_t>("axis", &axis);
+
+    if (status.IsOK()) {
+      axis_ = gsl::narrow_cast<int>(axis);
+    } else {
+      if (opset_ < 13) {
+        axis_ = 1;  // opset-12 and below, the default axis value is 1
+      } else {
+        axis_ = -1;  // opset-13, the default axis value is -1
+      }
+    }
+  }
 
   Status ComputeInternal(OpKernelContext* context) const override;
+
+ private:
+  int axis_;
+  int opset_;
 };
 }  // namespace sycl
 }  // namespace onnxruntime

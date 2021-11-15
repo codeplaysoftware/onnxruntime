@@ -57,16 +57,39 @@ Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
   const Tensor* X = context->Input<Tensor>(0);
   Tensor* Y = context->Output(0, X->Shape());
 
-  if (Y->Shape().Size() == 0) {
-    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Invalid Output Dimensions");
+  auto X_shape = X->Shape();
+
+  // One or more dim values = 0, nothing to do
+  if (X_shape.Size() == 0) {
+    return Status::OK();
   }
 
-  const int64_t N = X->Shape()[0];
-  const int64_t C = X->Shape().NumDimensions() > 1 ? X->Shape()[1] : 1;
-  const int64_t H = X->Shape().NumDimensions() > 2 ? X->Shape()[2] : 1;
-  const int64_t W = X->Shape().NumDimensions() > 3 ? X->Shape()[3] : 1;
+  // Dimensionality & Axis of computation
+  size_t rank = X_shape.NumDimensions();
+  const size_t axis = static_cast<size_t>(HandleNegativeAxis(axis_, rank));  // Count a negative axis backward (ex : -1 -> (rank -1))
 
-  bool is_transpose_required = H * W > 1;
+  if (axis >= rank) {
+    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Invalid Index (out of bounds [-rank,rank-1] )");
+  }
+
+  // Coerced dimensions of N Dimensional Input into 2D input [d(0)*d(1)*..*d(axis-1) , d(axis)*d(axis+1)*..*d(rank-1)]
+  const size_t NN = X_shape.SizeToDimension(axis);
+  const size_t DD = X_shape.SizeFromDimension(axis);
+
+  // Dimension variables for sycldnn
+  int64_t N, C, H, W;
+  N = C = H = W = 1;
+
+  if (opset_ < 13 || (opset_ == 13 && axis == 0)) {
+    // Input dimensions to be coerced into 2D [N,C] (C including reduction axis axis)
+    N = NN;
+    C = DD;
+  } else {
+    // Input dimensions other than axis to be coerced contiguously into N & H, and axis assigned to C
+    N = NN;
+    C = X_shape[axis];
+    H = DD / C;
+  }
 
   // SYCL BUFFERS
   const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
@@ -81,12 +104,15 @@ Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
   auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
   auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
+  // Transpose is only needed when axis is not the innermost when having OpSet=13
+  bool is_transpose_required = (opset_ == 13 && axis != (rank - 1));
+
   DeviceMem input, output;
   if (is_transpose_required) {
     input = backend.template allocate<T>(static_cast<size_t>(N * H * W * C));
     output = backend.template allocate<T>(static_cast<size_t>(N * H * W * C));
 
-    // Performing input conversion from NCHW to NHWC
+    // Performing input conversion from NCHW to NHWC (Porting C (a.k.a axis dimension) to innermost position)
     const std::vector<int> input_sizes = {(int)N, (int)C, (int)H, (int)W};
     snn::transpose::convert_nchw_to_nhwc<T, Backend>(x_data, input, input_sizes, backend);
   } else {
@@ -95,7 +121,7 @@ Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
   }
 
   // Allocating Workspace Memory
-  DeviceMem workspace = backend.template allocate<T>(static_cast<size_t>(N * H * W));
+  DeviceMem workspace = backend.template allocate<T>(static_cast<size_t>(N * H));
 
   // Setting Softmax parameters
   snn::softmax::SoftmaxParams params;
