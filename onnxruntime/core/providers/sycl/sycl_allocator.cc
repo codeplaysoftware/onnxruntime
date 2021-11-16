@@ -25,7 +25,7 @@ namespace sycl {
 
 template <typename T>
 inline void* SyclAlloc(size_t size, std::shared_ptr<cl::sycl::queue> q_) {
-  cl::sycl::buffer<T, 1>* X_buffer;
+  cl::sycl::buffer<T, 1>* X_buffer = nullptr;
   if (size > 0) {
     X_buffer = new cl::sycl::buffer<T, 1>{
         cl::sycl::range<1>{size / sizeof(T)},
