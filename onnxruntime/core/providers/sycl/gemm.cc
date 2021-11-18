@@ -72,6 +72,10 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
   // OUTPUT
   Tensor* Y = context->Output(0, {M, N});
 
+  // if input is empty tensor, return as nothing need to be calculated and we've set the shape for the output
+  if (M == 0 || N == 0)
+    return Status::OK();
+
   // SYCL BUFFERS
   const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
   const cl::sycl::buffer<T, 1> W_buffer = *W->template Ptr<cl::sycl::buffer<T, 1>>();
@@ -102,7 +106,7 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
         cgh.fill(out_acc, in_acc[0]);
       });
 
-    } else if (b_shape.NumDimensions() == 2 || b_shape[1] == 1) {
+    } else if (b_shape.NumDimensions() == 2 && b_shape[1] == 1) {
       // call SYCL-BLAS gemm
       // B(M,1)*ones(1,N)
       // TODO: We need to add Broadcast in SYCL-DNN to remove this slow Matmul
@@ -131,8 +135,8 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
     } else {
       // TODO : Copy operation to be removed for performance considerations
       // This is a temporary work-around until a SYCL DNN proper operation is implemented
-      // which takes the bias B as a separate input rather than expecting it to be filled 
-      // in advance into the output Y 
+      // which takes the bias B as a separate input rather than expecting it to be filled
+      // in advance into the output Y
       auto data_transfer = this->GetDataTransfer();
       data_transfer->CopyTensor(*B, *Y);
     }
@@ -152,7 +156,7 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
   // Launching SYCL-BLAS Gemm
   blas::_gemm(executor, trans_B_ ? 't' : 'n',
               trans_A_ ? 't' : 'n', trans_m, trans_n, K,
-              alpha_, w_data, lda, x_data, ldb, beta_, y_data, ldc);
+              alpha_, w_data, lda, x_data, ldb, (B == nullptr) ? 0 : beta_, y_data, ldc);
 
   return Status::OK();
 }

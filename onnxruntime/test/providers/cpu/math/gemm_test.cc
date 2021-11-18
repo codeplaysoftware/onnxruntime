@@ -380,7 +380,7 @@ void TestGemmScalarBroadcast() {
   test.AddOutput<T>("Y", {2, 3},
                     {11.0f, 11.0f, 11.0f,
                      -9.0f, -9.0f, -9.0f});
-  test.Run();
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 }
 
 TEST(GemmOpTest, GemmScalarBroadcast) {
