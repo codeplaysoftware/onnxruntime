@@ -1,0 +1,70 @@
+ARG BASE_IMAGE
+FROM $BASE_IMAGE as build_base
+
+# Install dependencies
+ENV CMAKE_URL=https://github.com/Kitware/CMake/releases/download/v3.21.0/cmake-3.21.0-linux-x86_64.tar.gz
+RUN DEBIAN_FRONTEND=noninteractive apt -yq update && apt install -yq --no-install-recommends \
+    ca-certificates \
+    libtinfo5 \
+    wget \
+    g++ \
+    gcc \
+    git \
+    cpio \
+    ninja-build \
+    python-pip \
+    clinfo \
+    libboost-all-dev \
+    software-properties-common \
+    ocl-icd-opencl-dev \
+    ocl-icd-dev \
+    opencl-headers && \
+    wget --no-verbose ${CMAKE_URL} -O /tmp/cmake.tar.gz && \
+    tar -zxf /tmp/cmake.tar.gz --strip=1 -C /usr --wildcards cmake*/bin/cmake cmake*/bin/ctest cmake*/share/cmake*/Modules cmake*/share/cmake*/Templates && \
+    apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    pip install enum34
+
+# Get ComputeCpp
+ARG COMPUTECPP_VERSION
+ENV COMPUTECPP_ROOT="/tmp/ComputeCpp/"
+RUN COMPUTECPP_TAR=$(echo ${COMPUTECPP_VERSION} | rev | cut -d'/' -f 1 | rev) && \
+    wget ${COMPUTECPP_VERSION} --no-verbose  && \
+    rm -rf ${COMPUTECPP_ROOT} && mkdir ${COMPUTECPP_ROOT} && \
+    tar -xzf ${COMPUTECPP_TAR} -C ${COMPUTECPP_ROOT} --strip-components 1 && \
+    rm ${COMPUTECPP_TAR} && \
+    ./${COMPUTECPP_ROOT}/bin/compute++ --version
+
+# Build SYCL-BLAS
+ARG SYCLBLAS_COMMIT
+ENV SYCL_BLAS_ROOT=/tmp/sycl-blas
+RUN git clone --recursive https://github.com/codeplaysoftware/sycl-blas.git ${SYCL_BLAS_ROOT} && \
+    cd ${SYCL_BLAS_ROOT} && \
+    if [ ! -z "${SYCLBLAS_COMMIT}" ]; then git checkout ${SYCLBLAS_COMMIT} && git show -s --format='%h %s'; fi && \
+    mkdir -p build && cd build && \
+    cmake ../ -GNinja -DComputeCpp_DIR=${COMPUTECPP_ROOT} \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DSYCL_COMPILER=computecpp \
+        -DBLAS_ENABLE_CONST_INPUT=ON \
+        -DBLAS_ENABLE_TESTING=OFF \
+        -DBLAS_ENABLE_BENCHMARK=OFF \
+        -Wno-dev && \
+    cmake --build .
+
+# Build SYCL-DNN
+ARG SYCLDNN_COMMIT
+ENV SYCL_DNN_ROOT=/tmp/sycl-dnn
+RUN  git clone --recursive https://github.com/codeplaysoftware/SYCL-DNN.git ${SYCL_DNN_ROOT} && \
+    cd ${SYCL_DNN_ROOT} && \
+    if [ ! -z "${SYCLDNN_COMMIT}" ]; then git checkout ${SYCLDNN_COMMIT} && git show -s --format='%h %s'; fi && \
+    mkdir -p build && cd build && \
+    cmake ../ -GNinja -DComputeCpp_DIR=${COMPUTECPP_ROOT} \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DSNN_BUILD_BENCHMARKS=OFF \
+        -DSNN_BUILD_TESTS=OFF \
+        -DSNN_BUILD_SAMPLES=OFF \
+        -DSNN_DOWNLOAD_EIGEN=OFF \
+        -DSNN_BUILD_DOCUMENTATION=OFF \
+        -DSNN_BENCH_SYCLBLAS=OFF \
+        -DCMAKE_INSTALL_PREFIX=${SYCL_DNN_ROOT}/build/install \
+        -Wno-dev && \
+    cmake --build . && cmake --install .

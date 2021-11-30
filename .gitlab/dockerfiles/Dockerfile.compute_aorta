@@ -1,0 +1,20 @@
+ARG BASE_IMAGE
+FROM $BASE_IMAGE as download_compute_aorta
+
+ENV CA_PACKAGE="ComputeAorta-riscv-llvm13-spike"
+ENV CA_ROOT="/tmp/ComputeAorta"
+
+# Get ComputeAorta
+RUN cd /tmp && \
+    mkdir $CA_ROOT && \
+    wget --no-verbose https://distribution.office.codeplay.com/computeaorta/nightly/latest-${CA_PACKAGE}.txt && \
+    LATEST=`cat latest-${CA_PACKAGE}.txt` && \
+    echo $LATEST && \
+    wget --no-verbose https://distribution.office.codeplay.com/computeaorta/nightly/$LATEST && \
+    tar xzf $LATEST -C $CA_ROOT --strip=1 && \
+    rm $LATEST *.txt
+
+ENV LD_LIBRARY_PATH=${CA_ROOT}/lib
+ENV OCL_ICD_FILENAMES=${CA_ROOT}/lib/libCL.so
+ENV OCL_ICD_VENDORS=/dev/null
+ENV OPENCL_ROOT=${CA_ROOT}

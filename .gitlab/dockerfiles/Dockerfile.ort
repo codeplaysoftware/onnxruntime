@@ -1,0 +1,26 @@
+ARG BASE_IMAGE
+FROM $BASE_IMAGE as build_onnxrt
+
+ARG BUILD_TYPE
+# Build onnxruntime
+ADD . /source
+RUN cd /source && \
+    CC=gcc CXX=g++ COMPUTECPP_DIR=${COMPUTECPP_ROOT} ./build.sh \
+    --use_sycl --build_shared_lib \
+    --syclblas_home=${SYCL_BLAS_ROOT} \
+    --sycldnn_home=${SYCL_DNN_ROOT}/build/install \
+    --config ${BUILD_TYPE} --cmake_generator=Ninja \
+    --parallel --skip_tests --build \
+    --update --skip_submodule_sync \
+    --cmake_extra_defines SYCLDNN_DIR=${SYCL_DNN_ROOT}/build/install/lib/sycldnn/cmake
+
+ARG PIPELINE
+RUN if [ z"$PIPELINE" = "znightly" ]; then \
+        mkdir -p onnxruntime/lib && \
+        cp -r /source/include onnxruntime && \
+        cp /source/build/Linux/${BUILD_TYPE}/libonnxruntime*.so* onnxruntime/lib && \
+        cp /tmp/sycl-blas/build/libsycl_blas.so* onnxruntime/lib && \
+        cp /tmp/sycl-dnn/build/install/lib/sycldnn/libsycldnn.so* onnxruntime/lib && \
+        tar -czf onnxruntime.tar.gz onnxruntime && \
+        rm -rf onnxruntime; \
+    fi

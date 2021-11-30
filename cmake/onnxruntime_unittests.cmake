@@ -163,6 +163,11 @@ function(AddTest)
         COMMAND ${NODE_EXECUTABLE} ${TEST_NODE_FLAGS} ${_UT_TARGET}.js ${TEST_ARGS}
         WORKING_DIRECTORY $<TARGET_FILE_DIR:${_UT_TARGET}>
       )
+    elseif(${onnxruntime_USE_SYCL})
+      include(GoogleTest)
+      gtest_discover_tests(${NAME} ${_UT_TARGET}
+        WORKING_DIRECTORY $<TARGET_FILE_DIR:${_UT_TARGET}>
+      )
     else()
       add_test(NAME ${_UT_TARGET}
         COMMAND ${_UT_TARGET} ${TEST_ARGS}
