@@ -177,7 +177,7 @@ test:nightly:
   needs: ["build:nightly"]
 test:riscv:
   variables:
-    TEST_FILTER: "MetadataTestGPU"
+    TEST_FILTER: "MetadataTestGPU|MetadataTestCPU"
   parallel:
     matrix:
       - BUILD_TYPE: [Debug, Release]
