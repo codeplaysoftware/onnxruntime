@@ -92,6 +92,9 @@ common::Status SYCLDataTransfer::CopyTensor(const Tensor& src, Tensor& dst, int 
     case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
       return sycl::SyclCopy<uint8_t>(src, dst, queue_);
       break;
+    case ONNX_NAMESPACE::TensorProto_DataType_INT64:
+      return sycl::SyclCopy<int64_t>(src, dst, queue_);
+      break;
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
       return sycl::SyclCopy<cl::sycl::half>(src, dst, queue_);
       break;

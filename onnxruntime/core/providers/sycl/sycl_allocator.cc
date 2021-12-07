@@ -55,6 +55,9 @@ void* SYCLAllocator::TypeAlloc(size_t size, int32_t dtype) {
     case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
       return sycl::SyclAlloc<uint8_t>(size, q_);
       break;
+    case ONNX_NAMESPACE::TensorProto_DataType_INT64:
+      return sycl::SyclAlloc<int64_t>(size, q_);
+      break;
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
       return sycl::SyclAlloc<cl::sycl::half>(size, q_);
       break;
