@@ -47,6 +47,9 @@ void TransposeTest(std::vector<int64_t>& input_shape,
   if (!is_openvino_supported) {
     excluded_providers.insert(kOpenVINOExecutionProvider);
   }
+  if (!std::is_same_v<T, float>) {
+    excluded_providers.insert(kSyclExecutionProvider);
+  }
 
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", excluded_providers);
 }

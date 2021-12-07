@@ -115,6 +115,7 @@ class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kO
 class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, 13, float, Relu);
 class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 10, float, Softmax);
 class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 11, 12, float, Softmax);
+class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Transpose);
 
 class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 14, float, Add);
 class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 11, float, AveragePool);
@@ -131,6 +132,7 @@ class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain,
 class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 12, float, MaxPool);
 class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 14, float, Relu);
 class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, float, Softmax);
+class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, float, Transpose);
 
 template <>
 KernelCreateInfo BuildKernelCreateInfo<void>() {
@@ -164,6 +166,7 @@ static Status RegisterSyclKernels(KernelRegistry& kernel_registry) {
       BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, 13, float, Relu)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 10, float, Softmax)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 11, 12, float, Softmax)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, 12, float, Transpose)>,
 
       BuildKernelCreateInfo<ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 14, float, Add)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 11, float, AveragePool)>,
@@ -180,6 +183,7 @@ static Status RegisterSyclKernels(KernelRegistry& kernel_registry) {
       BuildKernelCreateInfo<ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 12, float, MaxPool)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 14, float, Relu)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, float, Softmax)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, float, Transpose)>,
 
   };
 
