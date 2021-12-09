@@ -229,6 +229,9 @@ def parse_arguments():
         "--use_sycl", action='store_true',
         help="Build with SYCL Support")
     parser.add_argument(
+        "--use_sycl_nhwc", action='store_true',
+        help="Build with SYCL and NHWC Support")
+    parser.add_argument(
         "--syclblas_home", help="Path to SYCLBLAS installation/source dir")
     parser.add_argument(
         "--sycldnn_home", help="Path to SYCLDNN installation/source dir")
@@ -849,7 +852,8 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
         "-Donnxruntime_NVCC_THREADS=" + str(args.parallel),
         "-Donnxruntime_ENABLE_CUDA_PROFILING=" + ("ON" if args.enable_cuda_profiling else "OFF"),
         # SYCL EP Related
-        "-Donnxruntime_USE_SYCL=" + ("ON" if args.use_sycl else "OFF"),
+        "-Donnxruntime_USE_SYCL=" + ("ON" if args.use_sycl or args.use_sycl_nhwc else "OFF"),
+        "-Donnxruntime_USE_SYCL_NHWC=" + ("ON" if args.use_sycl_nhwc else "OFF"),
     ]
     if args.external_graph_transformer_path:
         cmake_args.append("-Donnxruntime_EXTERNAL_TRANSFORMER_SRC_PATH=" + args.external_graph_transformer_path)

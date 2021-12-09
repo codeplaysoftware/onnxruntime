@@ -1319,6 +1319,10 @@ endif()
 if (onnxruntime_USE_SYCL)
   add_definitions(-DUSE_SYCL=1)
 
+  if(onnxruntime_USE_SYCL_NHWC)
+    add_definitions("-DUSE_SYCL_NHWC=1")
+  endif()
+
   file(GLOB_RECURSE onnxruntime_providers_sycl_src CONFIGURE_DEPENDS
     "${ONNXRUNTIME_ROOT}/core/providers/sycl/*.h"
     "${ONNXRUNTIME_ROOT}/core/providers/sycl/*.cc"
@@ -1340,8 +1344,6 @@ if (onnxruntime_USE_SYCL)
   add_dependencies(onnxruntime_providers_sycl ${onnxruntime_EXTERNAL_DEPENDENCIES})
 
   target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} ${CMAKE_CURRENT_BINARY_DIR} ${eigen_INCLUDE_DIRS})
-  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLBLAS_HOME}/include ${onnxruntime_SYCLBLAS_HOME}/external/computecpp-sdk/include) 
-  target_include_directories(onnxruntime_providers_sycl PRIVATE ${ONNXRUNTIME_ROOT} PUBLIC ${onnxruntime_SYCLDNN_HOME}/include ${onnxruntime_SYCLDNN_HOME}/build)
 
   if(is_dpcpp)
     message("++++++++++++++++++++++++++ SYCL COMPILER : DPCPP +++++++++++++++++++++++++++++")
