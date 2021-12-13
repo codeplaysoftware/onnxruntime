@@ -69,7 +69,7 @@ class Tensor final {
   /// <param name="offset"></param>
   static void InitOrtValue(MLDataType p_type, const TensorShape& shape,
                            void* p_data, const OrtMemoryInfo& location,
-                           OrtValue& ort_value);
+                           OrtValue& ort_value, ptrdiff_t offset = 0);
 
   /**
    * Deprecated. The orginal design is this Tensor class won't do any allocation / release.
@@ -219,6 +219,14 @@ class Tensor final {
 
   void* MutableDataRaw() noexcept {
     return static_cast<char*>(p_data_) + byte_offset_;
+  }
+
+  void* MutablePtrRaw() noexcept {
+    return static_cast<char*>(p_data_);
+  }
+
+  const void* PtrRaw() const noexcept {
+    return static_cast<char*>(p_data_);
   }
 
   const void* DataRaw() const noexcept {

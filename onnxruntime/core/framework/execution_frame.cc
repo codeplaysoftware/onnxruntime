@@ -521,10 +521,12 @@ Status ExecutionFrame::AllocateMLValueTensorSelfOwnBufferHelper(OrtValue& ort_va
           // if the block is not correct, log message then fall back to default behavior
           if (block->size_ == size) {
             void* buffer = it->second.get();
-            auto status = AllocateTensorWithPreAllocateBufferHelper(
-                ort_value, static_cast<void*>(static_cast<char*>(buffer) + block->offset_), element_type, location,
-                shape);
-            return status;
+            return (GetAllocator(location)->SupportPointerArithmetic()) ? AllocateTensorWithPreAllocateBufferHelper(
+                                                                              ort_value, static_cast<void*>(static_cast<char*>(buffer) + block->offset_), element_type, location,
+                                                                              shape)
+                                                                        : AllocateTensorWithPreAllocateBufferHelper(
+                                                                              ort_value, static_cast<void*>(static_cast<char*>(buffer)), element_type, location,
+                                                                              shape, block->offset_);
           } else {
             // the block size may vary especially if the model has NonZero ops, or different sequence lengths are
             // fed in, so use VERBOSE as the log level as it's expected.
@@ -597,7 +599,8 @@ Status ExecutionFrame::AllocateMLValueTensorPreAllocateBuffer(OrtValue& ort_valu
     }
   }
 
-  void* reuse_buffer = reuse_tensor->MutableDataRaw();
+  void* reuse_buffer = GetAllocator(location)->SupportPointerArithmetic() ? reuse_tensor->MutableDataRaw() : reuse_tensor->MutablePtrRaw();
+  ptrdiff_t reuse_offset = GetAllocator(location)->SupportPointerArithmetic() ? 0 : reuse_tensor->ByteOffset();
 
   // create fence on reused ort_value if needed
   // TODO: differentiate reuse and alias, by add AllocKind::kAlias?
@@ -608,14 +611,14 @@ Status ExecutionFrame::AllocateMLValueTensorPreAllocateBuffer(OrtValue& ort_valu
 
   // reused OrtValue share the same fence
   ort_value.ShareFenceWith(ort_value_reuse);
-  return AllocateTensorWithPreAllocateBufferHelper(ort_value, reuse_buffer, element_type, location, shape);
+  return AllocateTensorWithPreAllocateBufferHelper(ort_value, reuse_buffer, element_type, location, shape, reuse_offset);
 }
 
 Status ExecutionFrame::AllocateTensorWithPreAllocateBufferHelper(OrtValue& ort_value, void* pBuffer,
                                                                  MLDataType element_type,
                                                                  const OrtMemoryInfo& location,
-                                                                 const TensorShape& shape) {
-  Tensor::InitOrtValue(element_type, shape, pBuffer, location, ort_value);
+                                                                 const TensorShape& shape, ptrdiff_t offset) {
+  Tensor::InitOrtValue(element_type, shape, pBuffer, location, ort_value, offset);
   return Status::OK();
 }
 

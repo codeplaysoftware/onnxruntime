@@ -53,9 +53,9 @@ void Tensor::InitOrtValue(MLDataType elt_type, const TensorShape& shape,
 }
 
 void Tensor::InitOrtValue(MLDataType p_type, const TensorShape& shape, void* p_data,
-                          const OrtMemoryInfo& location, OrtValue& ort_value) {
+                          const OrtMemoryInfo& location, OrtValue& ort_value, ptrdiff_t offset) {
   auto ml_tensor = DataTypeImpl::GetType<Tensor>();
-  auto p_tensor = std::make_unique<Tensor>(p_type, shape, p_data, location);
+  auto p_tensor = std::make_unique<Tensor>(p_type, shape, p_data, location, offset);
   ort_value.Init(p_tensor.release(), ml_tensor, ml_tensor->GetDeleteFunc());
 }
 

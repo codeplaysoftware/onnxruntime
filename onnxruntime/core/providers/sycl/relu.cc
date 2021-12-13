@@ -64,7 +64,7 @@ Status Relu<T>::ComputeInternal(OpKernelContext* context) const {
   const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
   cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
-  size_t count = Y_buffer.size();
+  size_t count = Y->SizeInBytes() / sizeof(T);
 
   // SYCL DNN Backend
   auto queue = *Queue();
