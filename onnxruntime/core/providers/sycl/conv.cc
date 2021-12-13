@@ -22,7 +22,8 @@
 #include "sycldnn/conv2d/launch.h"
 #include "sycldnn/conv2d/selector/default_selector.h"
 #include "sycldnn/conv2d/workspace_size.h"
-#include "sycldnn/bias/launch.h"
+#include "sycldnn/binaryop/launch.h"
+#include "sycldnn/binaryop/operators.h"
 #include "sycldnn/transpose/launch.h"
 #include "sycldnn/status.h"
 
@@ -185,15 +186,12 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
     auto b_data = DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
 
     //Settubg Bias parameters
-    snn::bias::BiasParams bias_params;
-    bias_params.in_rows = static_cast<int>(H_out);
-    bias_params.in_cols = static_cast<int>(W_out);
-    bias_params.batch = static_cast<int>(N);
-    bias_params.channels = static_cast<int>(M);
-    bias_params.bias = static_cast<int>(M);
+    snn::binaryop::BinaryParams bias_params;
+    bias_params.lhs_items = static_cast<int>(H_out * W_out * N * M);
+    bias_params.rhs_items = static_cast<int>(M);
 
     // Launching Bias addition kernel
-    snn::bias::launch<T>(output, b_data, output, bias_params, backend);
+    snn::binaryop::launch<T, snn::binaryop::Add>(output, b_data, output, bias_params, backend);
   }
 
   // Reverting the output back to NCHW layout

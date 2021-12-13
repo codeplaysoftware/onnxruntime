@@ -61,7 +61,13 @@ class IAllocator {
   */
   virtual void* Alloc(size_t size) = 0;
 
-  // Used for specific element type allocation (SYCL Execution Provider Buffer memory for instance)
+  // Used for checking if the EP supports pointer offset addition (SYCL EP Buffer
+  // does not allow for offset addition to base address)
+  virtual inline bool SupportPointerArithmetic() const {
+    return true;
+  }
+
+  // Used for specific element type allocation (SYCL EP Buffer memory for instance)
   virtual inline void* TypeAlloc(size_t size, int32_t) {
     return Alloc(size);
   }

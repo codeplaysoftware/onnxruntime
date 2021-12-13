@@ -38,7 +38,14 @@ inline void* SyclAlloc(size_t size, std::shared_ptr<cl::sycl::queue> q_) {
 }  // namespace sycl
 
 void* SYCLAllocator::Alloc(size_t size) {
-  auto type = ONNX_NAMESPACE::TensorProto_DataType_UINT8;
+  //Need to keep this default type as FLOAT
+  //to make sure enough memory is allocated
+  //for the second pass onwards, otherwise,
+  //we get segmentation fault
+
+  //The problematic call to Alloc comes from
+  //execution_frame.cc:418
+  auto type = ONNX_NAMESPACE::TensorProto_DataType_FLOAT;
   return TypeAlloc(size, type);
 }
 
@@ -68,8 +75,9 @@ void* SYCLAllocator::TypeAlloc(size_t size, int32_t dtype) {
 }
 
 void SYCLAllocator::Free(void* p) {
-  LOGS_DEFAULT(INFO) << "Memory freed with SYCL";
-  delete reinterpret_cast<cl::sycl::buffer<uint8_t, 1>*>(p);
+  auto ptr = reinterpret_cast<cl::sycl::buffer<float, 1>*>(p);
+  LOGS_DEFAULT(INFO) << "Memory freed with SYCL [" << ptr->size() << "]";
+  delete ptr;
 }
 
 // SYCL Allocation & De-Allocation on CPU Device (Memory used by CPU EP)

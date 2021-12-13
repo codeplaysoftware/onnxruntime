@@ -46,7 +46,7 @@ common::Status SyclCopy(const Tensor& src, Tensor& dst, std::shared_ptr<cl::sycl
   }
 
   if (dst_device.Type() == OrtDevice::CPU && src_device.Type() == OrtDevice::SYCL_DEVICE) {
-    cl::sycl::buffer<T, 1>* src_data = const_cast<cl::sycl::buffer<T, 1>*>(src.Data<cl::sycl::buffer<T, 1>>());
+    cl::sycl::buffer<T, 1>* src_data = const_cast<cl::sycl::buffer<T, 1>*>(src.Ptr<cl::sycl::buffer<T, 1>>());
     T* dst_data = dst.MutableData<T>();
     queue_->submit([&](cl::sycl::handler& cgh) {
             auto X_acc = cl::sycl::accessor<T, 1, cl::sycl::access::mode::read>(*src_data,
@@ -57,7 +57,7 @@ common::Status SyclCopy(const Tensor& src, Tensor& dst, std::shared_ptr<cl::sycl
         .wait();
 
   } else if (src_device.Type() == OrtDevice::CPU && dst_device.Type() == OrtDevice::SYCL_DEVICE) {
-    cl::sycl::buffer<T, 1>* dst_data = dst.MutableData<cl::sycl::buffer<T, 1>>();
+    cl::sycl::buffer<T, 1>* dst_data = dst.MutablePtr<cl::sycl::buffer<T, 1>>();
     const T* src_data = src.Data<T>();
     queue_->submit([&](cl::sycl::handler& cgh) {
             auto Y_acc = cl::sycl::accessor<T, 1, cl::sycl::access::mode::discard_write>(*dst_data,
@@ -68,8 +68,8 @@ common::Status SyclCopy(const Tensor& src, Tensor& dst, std::shared_ptr<cl::sycl
         .wait();
 
   } else if (src_device.Type() == OrtDevice::SYCL_DEVICE && dst_device.Type() == OrtDevice::SYCL_DEVICE) {
-    cl::sycl::buffer<T, 1>* src_data = const_cast<cl::sycl::buffer<T, 1>*>(src.Data<cl::sycl::buffer<T, 1>>());
-    cl::sycl::buffer<T, 1>* dst_data = dst.MutableData<cl::sycl::buffer<T, 1>>();
+    cl::sycl::buffer<T, 1>* src_data = const_cast<cl::sycl::buffer<T, 1>*>(src.Ptr<cl::sycl::buffer<T, 1>>());
+    cl::sycl::buffer<T, 1>* dst_data = dst.MutablePtr<cl::sycl::buffer<T, 1>>();
     queue_->submit([&](cl::sycl::handler& cgh) {
       auto X_acc = cl::sycl::accessor<T, 1, cl::sycl::access::mode::read>(*src_data,
                                                                           cgh, cl::sycl::range<1>(src_bytes_ / sizeof(T)),

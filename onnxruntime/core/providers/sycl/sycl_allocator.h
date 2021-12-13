@@ -33,6 +33,9 @@ class SYCLAllocator : public IAllocator {
 
   void* Alloc(size_t) override;
   void Free(void*) override;
+  bool SupportPointerArithmetic() const override {
+    return false;
+  }
   void* TypeAlloc(size_t, int32_t) override;
 
  private:

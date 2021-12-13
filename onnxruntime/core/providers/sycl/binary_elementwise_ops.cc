@@ -19,7 +19,8 @@
 #include <CL/sycl.hpp>
 
 #include "sycldnn/backend/snn_backend.h"
-#include "sycldnn/pointwise/launch.h"
+#include "sycldnn/binaryop/launch.h"
+#include "sycldnn/binaryop/operators.h"
 #include "sycldnn/status.h"
 
 namespace snn = sycldnn;
@@ -30,9 +31,9 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering Kernels
-#define REGISTER_VERSIONED_ADD_KERNELS_TYPED(T, start, end)       \
+#define REGISTER_VERSIONED_ADD_KERNELS_TYPED(T, op, start, end)   \
   ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
-      Add,                                                        \
+      op,                                                         \
       kOnnxDomain,                                                \
       start,                                                      \
       end,                                                        \
@@ -42,9 +43,9 @@ namespace sycl {
           .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
       Add<T>);
 
-#define REGISTER_ADD_KERNELS_TYPED(T, start)                      \
+#define REGISTER_ADD_KERNELS_TYPED(T, op, start)                  \
   ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
-      Add,                                                        \
+      op,                                                         \
       kOnnxDomain,                                                \
       start,                                                      \
       T,                                                          \
@@ -60,44 +61,36 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
 
   Tensor* Y = context->Output(0, A->Shape());
 
+  size_t count1 = A->SizeInBytes() / sizeof(T);
+  size_t count2 = B->SizeInBytes() / sizeof(T);
+
   // SYCL BUFFERS
   const cl::sycl::buffer<T, 1> A_buffer = *A->template Ptr<cl::sycl::buffer<T, 1>>();
-  cl::sycl::buffer<T, 1>* B_buffer = const_cast<cl::sycl::buffer<float, 1>*>(B->template Ptr<cl::sycl::buffer<T, 1>>());
+  const cl::sycl::buffer<T, 1> B_buffer = *B->template Ptr<cl::sycl::buffer<T, 1>>();
   cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
-  size_t count = A_buffer.size();  // Had to use .size() because of SYCL2020;
-
   // SYCL DNN Backend
-  auto queue = *Queue();
-  Backend backend(queue);
+  Backend backend(*Queue());
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
   // Creating Device Pointers to Buffers
   auto a_data = DeviceMem(A_buffer, static_cast<size_t>(A->ByteOffset() / sizeof(T)));
-
-  // Copying contents of 2nd input to output memory
-  // TODO : Copy operation to be removed for performance considerations
-  // This is a temporary work-around until a proper SYCL DNN pointwise op is implemented
-  // which takes both A and B const inputs and writes directly to the output Y
-  queue.submit([&](cl::sycl::handler& cgh) {
-    auto in_acc = B_buffer->template get_access<cl::sycl::access::mode::read>(cgh);
-    auto out_acc = Y_buffer.template get_access<cl::sycl::access::mode::discard_write>(cgh);
-    cgh.copy(in_acc, out_acc);
-  });
-
+  auto b_data = DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
   auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  // Launching add kernel
-  // TODO: Add binary operation in SYCL-DNN to manage the ResidualAdd operation
-  snn::pointwise::launch<T, snn::pointwise::ResidualAdd, snn::pointwise::Forward, Backend>(a_data, y_data, count, backend);
+  snn::binaryop::BinaryParams params;
+  params.lhs_items = static_cast<int>(count1);
+  params.rhs_items = static_cast<int>(count2);
+
+  snn::binaryop::launch<T, snn::binaryop::Add>(a_data, b_data, y_data, params, backend);
 
   return Status::OK();
 }
 
-REGISTER_VERSIONED_ADD_KERNELS_TYPED(float, 7, 12)
-REGISTER_VERSIONED_ADD_KERNELS_TYPED(float, 13, 13)
-REGISTER_ADD_KERNELS_TYPED(float, 14)
+REGISTER_VERSIONED_ADD_KERNELS_TYPED(float, Add, 7, 12)
+REGISTER_VERSIONED_ADD_KERNELS_TYPED(float, Add, 13, 13)
+REGISTER_ADD_KERNELS_TYPED(float, Add, 14)
 
 }  // namespace sycl
 }  // namespace onnxruntime

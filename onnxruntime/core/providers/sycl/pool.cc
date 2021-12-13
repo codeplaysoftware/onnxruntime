@@ -133,10 +133,10 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
 
   // Launch Pooling kernel
   if constexpr (PoolType::type == onnxruntime::PoolType::kAveragePool) {
-    snn::pooling::launch<float, snn::pooling::Average, snn::pooling::Forward>(
+    snn::pooling::launch<T, snn::pooling::Average, snn::pooling::Forward>(
         input, output, params, backend);
   } else if constexpr (PoolType::type == onnxruntime::PoolType::kMaxPool) {
-    snn::pooling::launch<float, snn::pooling::Max, snn::pooling::Forward>(
+    snn::pooling::launch<T, snn::pooling::Max, snn::pooling::Forward>(
         input, output, params, backend);
   }
 
