@@ -20,6 +20,7 @@
 
 #include "sycldnn/backend/sycl_blas_backend.h"
 #include "sycldnn/softmax/launch.h"
+#include "sycldnn/transpose/launch.h"
 #include "sycldnn/status.h"
 
 namespace snn = sycldnn;
@@ -57,15 +58,15 @@ Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
   const Tensor* X = context->Input<Tensor>(0);
   Tensor* Y = context->Output(0, X->Shape());
 
-  auto X_shape = X->Shape();
+  auto x_shape = X->Shape();
 
   // One or more dim values = 0, nothing to do
-  if (X_shape.Size() == 0) {
+  if (x_shape.Size() == 0) {
     return Status::OK();
   }
 
   // Dimensionality & Axis of computation
-  size_t rank = X_shape.NumDimensions();
+  size_t rank = x_shape.NumDimensions();
   const size_t axis = static_cast<size_t>(HandleNegativeAxis(axis_, rank));  // Count a negative axis backward (ex : -1 -> (rank -1))
 
   if (axis >= rank) {
@@ -73,8 +74,8 @@ Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
   }
 
   // Coerced dimensions of N Dimensional Input into 2D input [d(0)*d(1)*..*d(axis-1) , d(axis)*d(axis+1)*..*d(rank-1)]
-  const size_t NN = X_shape.SizeToDimension(axis);
-  const size_t DD = X_shape.SizeFromDimension(axis);
+  const size_t NN = x_shape.SizeToDimension(axis);
+  const size_t DD = x_shape.SizeFromDimension(axis);
 
   // Dimension variables for sycldnn
   int64_t N, C, H, W;
@@ -87,7 +88,7 @@ Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
   } else {
     // Input dimensions other than axis to be coerced contiguously into N & H, and axis assigned to C
     N = NN;
-    C = X_shape[axis];
+    C = x_shape[axis];
     H = DD / C;
   }
 
@@ -137,7 +138,14 @@ Status Softmax<T>::ComputeInternal(OpKernelContext* context) const {
     // Reverting the output back to NCHW layout
     const std::vector<int> output_sizes = {(int)N, (int)H, (int)W, (int)C};
     snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes, backend);
+
+    //Deallocating the input and output memory elements
+    backend.template deallocate(input);
+    backend.template deallocate(output);
   }
+
+  //Deallocating the workspace memory
+  backend.template deallocate(workspace);
 
   return Status::OK();
 }

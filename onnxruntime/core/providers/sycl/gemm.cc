@@ -92,7 +92,9 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
   auto w_data = DeviceMem(W_buffer, static_cast<size_t>(W->ByteOffset() / sizeof(T)));
   auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  // Check if Bias Addition is required
+  auto executor = backend.get_executor();
+
+  //Check if Bias Addition is required
   if (beta_ != 0 && B != nullptr) {
     cl::sycl::buffer<T, 1>* B_buffer = const_cast<cl::sycl::buffer<T, 1>*>(B->template Ptr<cl::sycl::buffer<T, 1>>());
     const TensorShape& b_shape = B->Shape();
@@ -114,10 +116,11 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
       auto event = queue.submit([&](cl::sycl::handler& cgh) {
         auto buf = ones.get_buffer();
         auto out_acc = buf.template get_access<cl::sycl::access::mode::discard_write>(cgh);
-        cgh.fill(out_acc, 1.f);
+        cgh.fill(out_acc, (T)1);
       });
 
       backend.template matmul<false, false, T, int>(b_data, ones, y_data, 0.f, M, 1, N);
+      backend.deallocate(ones);
 
     } else if (b_shape.NumDimensions() == 1 || b_shape[0] == 1) {
       // call SYCL-BLAS gemm
@@ -127,10 +130,11 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
       auto event = queue.submit([&](cl::sycl::handler& cgh) {
         auto buf = ones.get_buffer();
         auto out_acc = buf.template get_access<cl::sycl::access::mode::discard_write>(cgh);
-        cgh.fill(out_acc, 1.f);
+        cgh.fill(out_acc, (T)1);
       });
 
       backend.template matmul<false, false, T, int>(ones, b_data, y_data, 0.f, M, 1, N);
+      backend.deallocate(ones);
 
     } else {
       // TODO : Copy operation to be removed for performance considerations
@@ -142,21 +146,39 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
     }
   }
 
-  auto executor = backend.get_executor();
-
-  // Switch M and N to meet SYCL-BLAS requirements
+  //Switch M and N to meet SYCL-BLAS requirements
   auto trans_m = N;
   auto trans_n = M;
 
-  // Compute ld dimension based on transpose parameters
-  auto ldc = trans_m;
-  auto lda = trans_B_ ? K : trans_m;
-  auto ldb = trans_A_ ? trans_n : K;
+  //Launching SYCL-BLAS Gemm
+  if (M == 1) {
+    // The LHS matrix is actually a vector
+    auto gemv_m = trans_B_ ? K : trans_m;
+    auto gemv_n = trans_B_ ? trans_m : K;
+    auto gemv_lda = gemv_m;
+    constexpr int increment = 1;
+    blas::_gemv(executor, trans_B_ ? 't' : 'n', gemv_m, gemv_n,
+                alpha_, w_data, gemv_lda, x_data, increment, beta_,
+                y_data, increment);
+  } else if (N == 1) {
+    // The RHS matrix is actually a vector
+    auto gemv_m = trans_A_ ? trans_n : K;
+    auto gemv_n = trans_A_ ? K : trans_n;
+    auto gemv_lda = gemv_m;
+    constexpr int increment = 1;
+    blas::_gemv(executor, trans_A_ ? 'n' : 't', gemv_m, gemv_n,
+                alpha_, x_data, gemv_lda, w_data, increment, beta_,
+                y_data, increment);
+  } else {
+    //Compute ld dimension based on transpose parameters
+    auto ldc = trans_m;
+    auto lda = trans_B_ ? K : trans_m;
+    auto ldb = trans_A_ ? trans_n : K;
 
-  // Launching SYCL-BLAS Gemm
-  blas::_gemm(executor, trans_B_ ? 't' : 'n',
-              trans_A_ ? 't' : 'n', trans_m, trans_n, K,
-              alpha_, w_data, lda, x_data, ldb, (B == nullptr) ? 0 : beta_, y_data, ldc);
+    blas::_gemm(executor, trans_B_ ? 't' : 'n',
+                trans_A_ ? 't' : 'n', trans_m, trans_n, K,
+                alpha_, w_data, lda, x_data, ldb, (B == nullptr) ? 0.f : beta_, y_data, ldc);
+  }
 
   return Status::OK();
 }

@@ -22,6 +22,7 @@
 #include "sycldnn/pooling/launch.h"
 #include "sycldnn/pooling/operators.h"
 #include "sycldnn/transpose/launch.h"
+#include "sycldnn/helpers/padding.h"
 #include "sycldnn/status.h"
 
 namespace snn = sycldnn;
@@ -91,23 +92,38 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   snn::pooling::PoolingParams params;
   params.in_rows = static_cast<int>(H_in);
   params.in_cols = static_cast<int>(W_in);
-  params.out_rows = static_cast<int>(H_out);
-  params.out_cols = static_cast<int>(W_out);
-  if (pool_attrs_.global_pooling) {
-    params.window_rows = static_cast<int>(H_in);
-    params.window_cols = static_cast<int>(W_in);
-    params.stride_rows = 1;
-    params.stride_cols = 1;
-  } else {
-    params.window_rows = static_cast<int>(pool_attrs_.kernel_shape[0]);
-    params.window_cols = pool_attrs_.kernel_shape.size() > 1 ? static_cast<int>(pool_attrs_.kernel_shape[1]) : 1;
-    params.stride_rows = static_cast<int>(pool_attrs_.strides[0]);
-    params.stride_cols = pool_attrs_.strides.size() > 1 ? static_cast<int>(pool_attrs_.strides[1]) : 1;
-  }
+  params.window_rows = pool_attrs_.global_pooling ? static_cast<int>(H_in) : static_cast<int>(pool_attrs_.kernel_shape[0]);
+  params.window_cols = pool_attrs_.global_pooling ? static_cast<int>(W_in) : static_cast<int>(pool_attrs_.kernel_shape[1]);
+  params.stride_rows = pool_attrs_.global_pooling ? 1 : static_cast<int>(pool_attrs_.strides[0]);
+  params.stride_cols = pool_attrs_.global_pooling ? 1 : static_cast<int>(pool_attrs_.strides[1]);
   params.batch = static_cast<int>(N);
   params.channels = static_cast<int>(C);
-  params.pad_rows = pool_attrs_.global_pooling ? 0 : static_cast<int>(pool_attrs_.pads[0]);
-  params.pad_cols = pool_attrs_.global_pooling ? 0 : static_cast<int>(pool_attrs_.pads[pool_attrs_.pads.size() - 1]);
+
+  if (pool_attrs_.kernel_shape.size() == 1) {
+    params.window_cols = 1;
+  }
+  if (pool_attrs_.strides.size() == 1) {
+    params.stride_cols = 1;
+  }
+
+  if (pool_attrs_.auto_pad == AutoPadType::VALID) {
+    params = snn::helpers::add_padding_to(params, snn::PaddingMode::VALID);
+  } else if (pool_attrs_.auto_pad == AutoPadType::SAME_LOWER || pool_attrs_.auto_pad == AutoPadType::SAME_UPPER) {
+    params = snn::helpers::add_padding_to(params, snn::PaddingMode::SAME);
+  } else {
+    params.pad_rows = pool_attrs_.global_pooling ? 0 : static_cast<int>(pads[0] + pads[pooling_dims - 1]);
+    params.pad_cols = pool_attrs_.global_pooling ? 0 : static_cast<int>(pads[1] + pads[pooling_dims - 1]);
+
+    if (pool_attrs_.ceil_mode) {
+      params.out_rows = std::ceil((params.in_rows - params.window_rows + params.pad_rows) / (T)params.stride_rows) + 1;
+      params.out_cols = std::ceil((params.in_cols - params.window_cols + params.pad_cols) / (T)params.stride_cols) + 1;
+    } else {
+      params.out_rows = std::floor((params.in_rows - params.window_rows + params.pad_rows) / (T)params.stride_rows + 1);
+      params.out_cols = std::floor((params.in_cols - params.window_cols + params.pad_cols) / (T)params.stride_cols + 1);
+    }
+  }
+
+  ORT_RETURN_IF_NOT(H_out == static_cast<int64_t>(params.out_rows) && W_out == static_cast<int64_t>(params.out_cols), "Output size mismatch detected.");
 
   // SYCL BUFFERS
   const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
@@ -143,6 +159,10 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   // Reverting the output back to NCHW layout
   const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out, (int)C};
   snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes, backend);
+
+  //Deallocating all the memory elements used
+  backend.template deallocate(input);
+  backend.template deallocate(output);
 
   return Status::OK();
 }

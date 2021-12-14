@@ -51,6 +51,10 @@ class SyclKernel : public OpKernel {
     return s;
   }
 
+  inline void wait() const {
+    Queue()->wait_and_throw();
+  }
+
   virtual Status ComputeInternal(OpKernelContext* p_op_kernel_context) const = 0;
 
   inline cl::sycl::queue* Queue() const { return provider_->GetQueue(); };

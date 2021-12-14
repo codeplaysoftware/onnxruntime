@@ -86,8 +86,7 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
-  auto queue = *Queue();
-  Backend backend{queue};
+  Backend backend{*Queue()};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 

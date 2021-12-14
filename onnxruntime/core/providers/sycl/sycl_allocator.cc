@@ -70,7 +70,8 @@ void* SYCLAllocator::TypeAlloc(size_t size, int32_t dtype) {
       return sycl::SyclAlloc<cl::sycl::half>(size, q_);
       break;
     default:
-      ORT_THROW("Unexpected data type");
+      LOGS_DEFAULT(ERROR) << "Unexpected data type";
+      return nullptr;
   }
 }
 

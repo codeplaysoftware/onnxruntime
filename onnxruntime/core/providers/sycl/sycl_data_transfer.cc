@@ -111,7 +111,8 @@ common::Status SYCLDataTransfer::CopyTensor(const Tensor& src, Tensor& dst, int 
       return sycl::SyclCopy<cl::sycl::half>(src, dst, queue_);
       break;
     default:
-      ORT_THROW("Unexpected data type");
+      LOGS_DEFAULT(ERROR) << "Unexpected data type";
+      return Status::OK();
   }
 }
 }  // namespace onnxruntime
