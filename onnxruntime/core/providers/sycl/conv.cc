@@ -100,7 +100,6 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   TensorShape input_shape = X->Shape().Slice(2);
   ORT_RETURN_IF_ERROR(conv_attrs_.InferOutputShape(input_shape, kernel_shape, strides, dilations, pads, Y_dims));
   Tensor* Y = context->Output(0, Y_dims);
-  TensorShape output_shape = Y->Shape().Slice(2);
 
   // Bail out early if one of the dimensions is zero.
   if (Y->Shape().Size() == 0) {
@@ -117,13 +116,12 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
-  auto queue = *Queue();
-  Backend backend{queue};
+  Backend backend{*Queue()};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
   // Creating a Conv selector instance
-  auto selector = snn::conv2d::get_default_selector(queue.get_device());
+  auto selector = snn::conv2d::get_default_selector(Queue()->get_device());
 
   // Creating Device Pointers to Buffers
   auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
@@ -198,6 +196,11 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out, (int)M};
   snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes, backend);
 
+  //Deallocating all the memory elements used
+  backend.template deallocate(input);
+  backend.template deallocate(weights);
+  backend.template deallocate(output);
+  backend.template deallocate(workspace);
   return Status::OK();
 }
 

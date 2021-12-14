@@ -67,8 +67,7 @@ Status Relu<T>::ComputeInternal(OpKernelContext* context) const {
   size_t count = Y->SizeInBytes() / sizeof(T);
 
   // SYCL DNN Backend
-  auto queue = *Queue();
-  Backend backend{queue};
+  Backend backend{*Queue()};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
