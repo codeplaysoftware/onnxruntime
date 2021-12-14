@@ -4,6 +4,8 @@ variables:
   GIT_DEPTH: 5
   REPO_PATH: research-and-development/sycl-onnx/sycl-onnx-runtime/onnxruntime
   COMPUTECPP_VERSION: "https://distribution.office.codeplay.com/computecpp/releases/latest/ComputeCpp-CE-x86_64-linux-gnu.tar.gz"
+  SYCLBLAS_COMMIT: "927113928e8bfa509bc42935a29ae767239d31fe"
+  SYCLDNN_COMMIT: "ce05b1294864936a4f789ec2085e0629aeea2a77"
 
 workflow:
   rules:
