@@ -25,6 +25,7 @@ stages:
   - build
   - test
   - deploy
+  - promote
 
 .mr-rules:
   rules:
@@ -90,6 +91,11 @@ default:
       --header "JOB-TOKEN: $CI_JOB_TOKEN"
       --upload-file ${PACKAGE_TAR}
       ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PACKAGE_NAME}/${VERSION}/${PACKAGE_TAR}'
+    - echo ONNX_RUNTIME_VERSION=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PACKAGE_NAME}/${VERSION}/${PACKAGE_TAR} >> deploy.env
+    - echo COMPUTE_CPP_VERSION=${COMPUTECPP_VERSION} >> deploy.env
+  artifacts:
+    reports:
+      dotenv: deploy.env
 
 .base:
   variables:
@@ -194,3 +200,16 @@ deploy:
     BUILD_TYPE: Release
   extends: [.nightly-rules, .deploy-base, .deploy]
   needs: ["test:nightly"]
+
+promote:
+  stage: promote
+  extends: [.nightly-rules]
+  needs:
+    - job: deploy
+      artifacts: true
+  inherit:
+    variables: false
+  trigger:
+    project: webservices/acoran-for-risc-v-documentation
+    branch: cicd_dev
+    # branch: master
