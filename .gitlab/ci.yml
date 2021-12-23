@@ -92,7 +92,7 @@ default:
       --upload-file ${PACKAGE_TAR}
       ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PACKAGE_NAME}/${VERSION}/${PACKAGE_TAR}'
     - echo ONNX_RUNTIME_VERSION=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PACKAGE_NAME}/${VERSION}/${PACKAGE_TAR} >> deploy.env
-    - echo COMPUTE_CPP_VERSION=${COMPUTECPP_VERSION} >> deploy.env
+    - echo COMPUTECPP_VERSION=${COMPUTECPP_VERSION} >> deploy.env
   artifacts:
     reports:
       dotenv: deploy.env
