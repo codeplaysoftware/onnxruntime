@@ -20,6 +20,8 @@
 #include "core/providers/sycl/sycl_data_transfer.h"
 #include "core/providers/sycl/sycl_fwd.h"
 
+#include "core/framework/data_transfer_manager.h"
+
 #include "core/framework/kernel_registry.h"
 #include "core/graph/constants.h"
 
@@ -42,8 +44,46 @@ SYCLExecutionProvider::SYCLExecutionProvider() : IExecutionProvider{onnxruntime:
                      << queue_->get_device().get_info<cl::sycl::info::device::vendor>();
 }
 
-SYCLExecutionProvider::SYCLExecutionProvider(const SYCLExecutionProviderInfo& info) : IExecutionProvider{onnxruntime::kSyclExecutionProvider}, info_{info}, queue_{info.device_selector == OrtSYCLDeviceSelector::CPU ? make_shared<cl::sycl::queue>(cl::sycl::cpu_selector{}) : (info.device_selector == OrtSYCLDeviceSelector::GPU ? make_shared<cl::sycl::queue>(cl::sycl::gpu_selector{}) : make_shared<cl::sycl::queue>(cl::sycl::default_selector{}))} {
-  LOGS_DEFAULT(INFO) << "SYCL EP instantiated using Device Selector : \n\tdevice's name : " << queue_->get_device().get_info<cl::sycl::info::device::name>() << "\n\tdevice's vendor : " << queue_->get_device().get_info<cl::sycl::info::device::vendor>();
+SYCLExecutionProvider::SYCLExecutionProvider(const SYCLExecutionProviderInfo& info) : IExecutionProvider{onnxruntime::kSyclExecutionProvider}, info_{info}, queue_{info.device_selector.size() == 0 ? make_shared<cl::sycl::queue>(cl::sycl::default_selector{}) : make_shared<cl::sycl::queue>(sycl_device_selector{info.device_selector, info.device_vendor})} {
+  // Checking if device was correctly selected, otherwise LOG warning/error
+
+  // Device vendor name check
+  auto deviceInfo = queue_->get_device().get_info<cl::sycl::info::device::vendor>();
+  // Upper case formatting for string check purposes
+  for_each(deviceInfo.begin(), deviceInfo.end(), [](char& c) {
+    c = ::toupper(c);
+  });
+  bool vendor_match = info.device_vendor.size() > 0 ? deviceInfo.find(info.device_vendor) != string::npos : true;
+
+  // Device Selector (type) check
+  bool selector_match = true;
+  std::string device_type;
+
+  if (!std::strcmp(info.device_selector.c_str(), "CPU")) {
+    selector_match = queue_->get_device().is_cpu();
+    device_type = selector_match ? "CPU" : "";
+  } else if (!std::strcmp(info.device_selector.c_str(), "GPU")) {
+    selector_match = queue_->get_device().is_gpu();
+    device_type = selector_match ? "GPU" : "";
+  } else if (!std::strcmp(info.device_selector.c_str(), "ACC")) {
+    selector_match = queue_->get_device().is_accelerator();
+    device_type = selector_match ? "ACCELERATOR" : "";
+  } else if (!std::strcmp(info.device_selector.c_str(), "HOST")) {
+    selector_match = queue_->get_device().is_host();
+    device_type = selector_match ? "HOST" : "";
+  } else {
+    selector_match = true;
+    device_type = selector_match ? "DEFAULT" : "";
+  }
+
+  // Warning if selected device doesn't match vendor name provided
+  if (selector_match && !vendor_match) {
+    LOGS_DEFAULT(WARNING) << "Specified SYCL Device Vendor Name : [" << info_.device_vendor << "] couldn't be found for device type : [" << device_type << "]";
+  }
+
+  // Log selected device informations (name & vendor)
+  LOGS_DEFAULT(INFO)
+      << "SYCL EP instantiated using Device Selector : \n\tdevice's type : " << device_type << "\n\tdevice's name : " << queue_->get_device().get_info<cl::sycl::info::device::name>() << "\n\tdevice's vendor : " << queue_->get_device().get_info<cl::sycl::info::device::vendor>();
 }
 
 SYCLExecutionProvider::~SYCLExecutionProvider() {
@@ -53,27 +93,40 @@ SYCLExecutionProvider::~SYCLExecutionProvider() {
 void SYCLExecutionProvider::RegisterAllocator(shared_ptr<AllocatorManager> allocator_manager) {
   // GetAllocator requires a device_id (first argument, 0 by default).
   // Should eventually change later once mapped to an openCL device_id
-  auto sycl_alloc = allocator_manager->GetAllocator(0, OrtMemTypeDefault);
+  auto sycl_alloc = allocator_manager->GetAllocator(info_.device_id, OrtMemTypeDefault);
 
   if (nullptr == sycl_alloc) {
-    sycl_alloc = CreateSYCLAllocator(queue_);
+    sycl_alloc = CreateSYCLAllocator(queue_, info_.device_id);
     allocator_manager->InsertAllocator(sycl_alloc);
   }
   TryInsertAllocator(sycl_alloc);
+
+  // OrtMemTypeCPUOutput -- allocated by SYCLHostAllocator, used to copy SYCL device memory to CPU
+  // Used by node MemcpyToHost only
+  auto sycl_host_alloc = allocator_manager->GetAllocator(DEFAULT_CPU_ALLOCATOR_DEVICE_ID, OrtMemTypeCPUOutput);
+  if (nullptr == sycl_host_alloc) {
+    AllocatorCreationInfo sycl_host_memory_info(
+        [](OrtDevice::DeviceId device_id) {
+          return std::make_unique<SYCLHostAllocator>(device_id, "sycl_host");
+        },
+        DEFAULT_CPU_ALLOCATOR_DEVICE_ID);
+
+    sycl_host_alloc = CreateAllocator(sycl_host_memory_info);
+    allocator_manager->InsertAllocator(sycl_host_alloc);
+  }
+  TryInsertAllocator(sycl_host_alloc);
 }
 
 // Create Allocator
-AllocatorPtr SYCLExecutionProvider::CreateSYCLAllocator(shared_ptr<cl::sycl::queue> q) {
-  AllocatorCreationInfo default_memory_info(
+AllocatorPtr SYCLExecutionProvider::CreateSYCLAllocator(shared_ptr<cl::sycl::queue> q, OrtDevice::DeviceId device_id) {
+  AllocatorCreationInfo sycl_memory_info(
       [&q](OrtDevice::DeviceId id) {
-        return make_unique<SYCLAllocator>(q);
+        return make_unique<SYCLAllocator>(q, id);
       },
-      0,       //device_id is 0 by default. Should eventually change later once mapped to an openCL device_id
-      false);  //usearena set to false
-               //4th argument is OrtArenaCfg arena_cfg0 which is {0, -1, -1, -1, -1} by default.
-               //Not needed anyways because usearena is false
+      device_id,  //device_id is 0 by default
+      false);     //usearena set to false, following parameters thus not needed
 
-  return CreateAllocator(default_memory_info);
+  return CreateAllocator(sycl_memory_info);
 }
 
 // Get Allocator
@@ -91,7 +144,8 @@ cl::sycl::queue* SYCLExecutionProvider::GetQueue() const {
 }
 
 namespace sycl {
-
+class ONNX_OPERATOR_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, MemcpyFromHost);
+class ONNX_OPERATOR_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, MemcpyToHost);
 class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 7, 12, float, Add);
 class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, 13, float, Add);
 class ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 7, 9, float, AveragePool);
@@ -137,6 +191,8 @@ class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain,
 class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, float, Softmax);
 class ONNX_OPERATOR_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, float, Transpose);
 class ONNX_OPERATOR_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 14, Reshape);
+class ONNX_OPERATOR_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, MemcpyFromHost);
+class ONNX_OPERATOR_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, MemcpyToHost);
 
 template <>
 KernelCreateInfo BuildKernelCreateInfo<void>() {
@@ -147,6 +203,8 @@ KernelCreateInfo BuildKernelCreateInfo<void>() {
 static Status RegisterSyclKernels(KernelRegistry& kernel_registry) {
   static const BuildKernelCreateInfoFn function_table[] = {
       BuildKernelCreateInfo<void>,  //default entry to avoid the list become empty after ops-reducing
+      BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, MemcpyFromHost)>,
+      BuildKernelCreateInfo<ONNX_OPERATOR_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 1, MemcpyToHost)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 7, 12, float, Add)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 13, 13, float, Add)>,
       BuildKernelCreateInfo<ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_CLASS_NAME(kSyclExecutionProvider, kOnnxDomain, 7, 9, float, AveragePool)>,

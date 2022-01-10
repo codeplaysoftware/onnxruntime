@@ -429,7 +429,8 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
 #ifdef USE_SYCL
       p_models = 1;  // Nb of cores to use
       OrtSYCLProviderOptions syclOptions;
-      syclOptions.device_selector = OrtSYCLDeviceSelector::DEFAULT;
+      syclOptions.device_selector = "";  // Specific device types can be passed ("GPU", "CPU", "ACC", etc..)
+      syclOptions.device_vendor = "";    // Specific vendor names can be passed for target device
       sf.SetGraphOptimizationLevel(ORT_DISABLE_ALL);
       sf.AppendExecutionProvider_SYCL(syclOptions);
 #else

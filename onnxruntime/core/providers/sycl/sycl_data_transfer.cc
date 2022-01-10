@@ -22,6 +22,12 @@ namespace onnxruntime {
 SYCLDataTransfer::SYCLDataTransfer(std::shared_ptr<cl::sycl::queue> q) : queue_{q} {
 }
 
+bool SYCLDataTransfer::CanCopy(const OrtDevice& src_device, const OrtDevice& dst_device) const {
+  LOGS_DEFAULT(INFO) << "Source device : " << src_device.ToString();
+  LOGS_DEFAULT(INFO) << "Destination Device" << dst_device.ToString();
+  return (src_device.Type() == OrtDevice::SYCL_DEVICE || dst_device.Type() == OrtDevice::SYCL_DEVICE);
+}
+
 namespace sycl {
 
 template <typename T>
@@ -39,7 +45,7 @@ common::Status SyclCopy(const Tensor& src, Tensor& dst, std::shared_ptr<cl::sycl
     return Status::OK();
   }
 
-  if (dst_device.Type() == OrtDevice::CPU && src_device.Type() != OrtDevice::CPU) {
+  if (dst_device.Type() == OrtDevice::CPU && src_device.Type() == OrtDevice::SYCL_DEVICE) {
     cl::sycl::buffer<T, 1>* src_data = const_cast<cl::sycl::buffer<T, 1>*>(src.Data<cl::sycl::buffer<T, 1>>());
     T* dst_data = dst.MutableData<T>();
     queue_->submit([&](cl::sycl::handler& cgh) {
@@ -50,7 +56,7 @@ common::Status SyclCopy(const Tensor& src, Tensor& dst, std::shared_ptr<cl::sycl
           })
         .wait();
 
-  } else if (src_device.Type() == OrtDevice::CPU && dst_device.Type() != OrtDevice::CPU) {
+  } else if (src_device.Type() == OrtDevice::CPU && dst_device.Type() == OrtDevice::SYCL_DEVICE) {
     cl::sycl::buffer<T, 1>* dst_data = dst.MutableData<cl::sycl::buffer<T, 1>>();
     const T* src_data = src.Data<T>();
     queue_->submit([&](cl::sycl::handler& cgh) {
@@ -60,7 +66,8 @@ common::Status SyclCopy(const Tensor& src, Tensor& dst, std::shared_ptr<cl::sycl
             cgh.copy(src_data, Y_acc);
           })
         .wait();
-  } else {
+
+  } else if (src_device.Type() == OrtDevice::SYCL_DEVICE && dst_device.Type() == OrtDevice::SYCL_DEVICE) {
     cl::sycl::buffer<T, 1>* src_data = const_cast<cl::sycl::buffer<T, 1>*>(src.Data<cl::sycl::buffer<T, 1>>());
     cl::sycl::buffer<T, 1>* dst_data = dst.MutableData<cl::sycl::buffer<T, 1>>();
     queue_->submit([&](cl::sycl::handler& cgh) {
@@ -72,6 +79,11 @@ common::Status SyclCopy(const Tensor& src, Tensor& dst, std::shared_ptr<cl::sycl
                                                                                    cl::sycl::id<1>(dst.ByteOffset() / sizeof(T)));
       cgh.copy(X_acc, Y_acc);
     });
+
+  } else {
+    LOGS_DEFAULT(ERROR) << "Trying to copy from (and/or) to a non supported SYCL device type (and/or) memory type !"
+                        << "SYCL EP only allows [HOST CPU] <-> [SYCL Device] and [SYCL Device] <-> [SYCL Device]";
+    ORT_THROW("Copy not permitted");
   }
 
   return Status::OK();

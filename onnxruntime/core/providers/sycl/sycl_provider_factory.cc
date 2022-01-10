@@ -51,10 +51,11 @@ std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(c
 }  // namespace onnxruntime
 
 ORT_API_STATUS_IMPL(OrtSessionOptionsAppendExecutionProvider_SYCL,
-                    _In_ OrtSessionOptions* options,
-                    int device_id) {
+                    _In_ OrtSessionOptions* options) {
   SYCLExecutionProviderInfo info{};
-  info.device_id = device_id;
+  info.device_id = 0;         // 0 by default
+  info.device_selector = "";  // Default SYCL device
+  info.device_vendor = "";    // No specific vendor
   options->provider_factories.push_back(onnxruntime::CreateExecutionProviderFactory_SYCL(info));
   return nullptr;
 }
@@ -63,8 +64,18 @@ ORT_API_STATUS_IMPL(OrtApis::SessionOptionsAppendExecutionProvider_SYCL,
                     _In_ OrtSessionOptions* options,
                     _In_ const OrtSYCLProviderOptions* sycl_options) {
   SYCLExecutionProviderInfo info{};
-  info.device_selector = sycl_options->device_selector;                        // Device Selector (Enum : GPU, CPU, DEFAULT, HOST)
-  info.device_id = gsl::narrow<OrtDevice::DeviceId>(sycl_options->device_id);  // Device Id (int)
+  info.device_id = 0;                                                                                // Always set to 0
+  info.device_selector = sycl_options->device_selector;                                              // Device Selector (string) ["GPU", "CPU", "ACC" , "HOST", ""]
+  info.device_vendor = (sycl_options->device_vendor == nullptr) ? "" : sycl_options->device_vendor;  // Device Vendor (string)
+
+  // Upper case formatting (used for string equality check when selecting SYCL device)
+  std::for_each(info.device_selector.begin(), info.device_selector.end(), [](char& c) {
+    c = ::toupper(c);
+  });
+  std::for_each(info.device_vendor.begin(), info.device_vendor.end(), [](char& c) {
+    c = ::toupper(c);
+  });
+
   options->provider_factories.push_back(onnxruntime::CreateExecutionProviderFactory_SYCL(info));
   return nullptr;
 }
