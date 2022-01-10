@@ -16,28 +16,20 @@
 
 #pragma once
 
-#include "core/common/logging/logging.h"
-#include "core/framework/data_transfer.h"
-#include "core/framework/ortdevice.h"
-#include "core/framework/tensor.h"
-#include <CL/sycl.hpp>
-#include <algorithm>
-#include <iostream>
+#include "core/framework/op_kernel.h"
+#include "core/framework/data_transfer_manager.h"
+
+#include "core/providers/sycl/sycl_fwd.h"
+#include "core/providers/sycl/sycl_data_transfer.h"
 
 namespace onnxruntime {
 
-class SYCLDataTransfer : public IDataTransfer {
+// Memcpy implements copy operation as an OpKernel enables creating copy nodes and place them
+// between EPs involving different types of devices and/or memories.
+class Memcpy final : public OpKernel {
  public:
-  SYCLDataTransfer() = default;
-  SYCLDataTransfer(std::shared_ptr<cl::sycl::queue> q);
-  ~SYCLDataTransfer(){};
+  Memcpy(const OpKernelInfo& info) : OpKernel{info} {}
 
-  bool CanCopy(const OrtDevice& src_device, const OrtDevice& dst_device) const override;
-
-  common::Status CopyTensor(const Tensor& src, Tensor& dst, int exec_queue_id) const override;
-
- private:
-  std::shared_ptr<cl::sycl::queue> queue_;
+  Status Compute(OpKernelContext* ctx) const;
 };
-
 }  // namespace onnxruntime

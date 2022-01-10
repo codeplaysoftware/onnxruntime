@@ -23,6 +23,7 @@ namespace onnxruntime {
 
 namespace sycl {
 
+// SYCL Allocation & De-Allocation on SYCL Device (Memory used by SYCL EP)
 template <typename T>
 inline void* SyclAlloc(size_t size, std::shared_ptr<cl::sycl::queue> q_) {
   cl::sycl::buffer<T, 1>* X_buffer = nullptr;
@@ -70,4 +71,21 @@ void SYCLAllocator::Free(void* p) {
   LOGS_DEFAULT(INFO) << "Memory freed with SYCL";
   delete reinterpret_cast<cl::sycl::buffer<uint8_t, 1>*>(p);
 }
+
+// SYCL Allocation & De-Allocation on CPU Device (Memory used by CPU EP)
+// Useful when the output of a given SYCL EP Node is re-used by the following
+// CPU EP assigned node (as a fall-back due to unsupported operations)
+void* SYCLHostAllocator::Alloc(size_t size) {
+  void* p = nullptr;
+  if (size > 0) {
+    p = malloc(size);
+    LOGS_DEFAULT(INFO) << "Memory allocated by SYCL EP on CPU device [" << size << " bytes ]";
+  }
+  return p;
+}
+
+void SYCLHostAllocator::Free(void* p) {
+  free(p);
+}
+
 }  // namespace onnxruntime

@@ -24,16 +24,11 @@
 
 namespace onnxruntime {
 
+// Base SYCL EP Allocator using buffer, targeting devices of type OrtDevice::SYCL_DEVICE
+// with memory type OrtDevice::MemType::SYCL_MEMORY
 class SYCLAllocator : public IAllocator {
  public:
-  SYCLAllocator(std::shared_ptr<cl::sycl::queue> q) : IAllocator(OrtMemoryInfo("sycl",
-                                                                               OrtAllocatorType::OrtDeviceAllocator,
-                                                                               OrtDevice(OrtDevice::GPU,
-                                                                                         OrtDevice::MemType::DEFAULT,
-                                                                                         0),
-                                                                               0,
-                                                                               OrtMemTypeDefault)),
-                                                      q_{q} {
+  SYCLAllocator(std::shared_ptr<cl::sycl::queue> q, OrtDevice::DeviceId device_id) : IAllocator(OrtMemoryInfo("sycl", OrtAllocatorType::OrtDeviceAllocator, OrtDevice(OrtDevice::SYCL_DEVICE, OrtDevice::MemType::SYCL_MEMORY, device_id), device_id, OrtMemTypeDefault)), q_{q} {
   }
 
   void* Alloc(size_t) override;
@@ -43,4 +38,22 @@ class SYCLAllocator : public IAllocator {
  private:
   std::shared_ptr<cl::sycl::queue> q_;
 };
+
+// SYCL Host allocator targetting host device of type OrtDevice::CPU
+// and memory type OrtDevice::MemType::DEFAULT. Such a memory is allocated
+// by SYCL EP and used by CPU EP for computation (for e.g. when immediate
+// output of a SYCL Node is consumed by a CPU EP Node).
+class SYCLHostAllocator : public IAllocator {
+ public:
+  SYCLHostAllocator(OrtDevice::DeviceId device_id, const char* name)
+      : IAllocator(
+            OrtMemoryInfo(name, OrtAllocatorType::OrtDeviceAllocator,
+                          OrtDevice(OrtDevice::CPU, OrtDevice::MemType::DEFAULT, device_id),
+                          device_id, OrtMemTypeCPUOutput)) {
+  }
+
+  void* Alloc(size_t size) override;
+  void Free(void* p) override;
+};
+
 }  // namespace onnxruntime

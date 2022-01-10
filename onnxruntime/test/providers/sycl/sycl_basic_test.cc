@@ -31,7 +31,8 @@ namespace test {
 // This test should not be disabled (SYCL Default Selector)
 TEST(SYCLExecutionProviderTest, MetadataTestDEFAULT) {
   SYCLExecutionProviderInfo info;
-  info.device_selector = OrtSYCLDeviceSelector::DEFAULT;  // And Device ID being 0 by default
+  info.device_selector = "";
+  info.device_vendor = "";
   auto provider = std::make_unique<SYCLExecutionProvider>(info);
   EXPECT_TRUE(provider != nullptr);
 
@@ -44,7 +45,8 @@ TEST(SYCLExecutionProviderTest, MetadataTestDEFAULT) {
 // This test can be disabled when testing non CPU targets
 TEST(SYCLExecutionProviderTest, MetadataTestCPU) {
   SYCLExecutionProviderInfo info;
-  info.device_selector = OrtSYCLDeviceSelector::CPU;  // And Device ID being 0 by default
+  info.device_selector = "CPU";  // And Device ID being 0 by default
+  info.device_vendor = "";
   auto provider = std::make_unique<SYCLExecutionProvider>(info);
   EXPECT_TRUE(provider != nullptr);
 
@@ -57,7 +59,8 @@ TEST(SYCLExecutionProviderTest, MetadataTestCPU) {
 // This test can be disabled when testing non GPU targets
 TEST(SYCLExecutionProviderTest, MetadataTestGPU) {
   SYCLExecutionProviderInfo info;
-  info.device_selector = OrtSYCLDeviceSelector::GPU;  // And Device ID being 0 by default
+  info.device_selector = "GPU";  // And Device ID being 0 by default
+  info.device_vendor = "";
   auto provider = std::make_unique<SYCLExecutionProvider>(info);
   EXPECT_TRUE(provider != nullptr);
 
@@ -67,10 +70,10 @@ TEST(SYCLExecutionProviderTest, MetadataTestGPU) {
   ASSERT_STREQ(provider->GetAllocator(0, OrtMemTypeDefault)->Info().name, "sycl");
 }
 
-// * This custom SYCL EP Test needs te be re-implemented to catch up the buffer based allocation 
+// * This custom SYCL EP Test needs te be re-implemented to catch up the buffer based allocation
 // and memory transfer policy. Otherwise, it causes seg fault because no data is copied
 // properly to the device *
-// 
+//
 // TEST(SYCLExecutionProviderTest, FunctionTest_1) {
 //   const ORTCHAR_T* model_file_name = ORT_TSTR("sycl_execution_provider_test_graph.onnx");
 

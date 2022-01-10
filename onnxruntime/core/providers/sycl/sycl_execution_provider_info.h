@@ -19,6 +19,7 @@
 #include "core/framework/ortdevice.h"
 #include "core/framework/provider_options.h"
 #include "core/session/onnxruntime_c_api.h"
+#include <string>
 
 namespace onnxruntime {
 struct SYCLExecutionProviderInfo {
@@ -26,8 +27,9 @@ struct SYCLExecutionProviderInfo {
   static SYCLExecutionProviderInfo FromProviderOptions(const ProviderOptions& options);
   static ProviderOptions ToProviderOptions(const SYCLExecutionProviderInfo& info);
 
-  // Main infos 
-  OrtSYCLDeviceSelector device_selector{DEFAULT};
-  OrtDevice::DeviceId device_id{0};
+  // Main infos
+  std::string device_selector{""};  // SYCL Device selector type : "CPU", "GPU", "HOST", "ACC", or "" for default selector
+  std::string device_vendor{""};     // SYCL Device manufacturer name
+  OrtDevice::DeviceId device_id{0};  // SYCL Device id (always = 0 since device is defined by selector not id)
 };
 }  // namespace onnxruntime

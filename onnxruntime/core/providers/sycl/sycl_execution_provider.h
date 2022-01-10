@@ -19,8 +19,7 @@
 
 #include "core/framework/execution_provider.h"
 #include "core/providers/sycl/sycl_execution_provider_info.h"
-#include "CL/sycl.hpp"
-
+#include "core/providers/sycl/sycl_device_selector.h"
 namespace onnxruntime {
 
 // Logical device representation.
@@ -30,7 +29,7 @@ class SYCLExecutionProvider : public IExecutionProvider {
   explicit SYCLExecutionProvider(const SYCLExecutionProviderInfo& info);
   virtual ~SYCLExecutionProvider();
 
-  int GetDeviceId() const override { return (int)info_.device_selector; }
+  int GetDeviceId() const override { return (int)info_.device_id; }
 
   cl::sycl::queue* GetQueue() const;
 
@@ -38,7 +37,7 @@ class SYCLExecutionProvider : public IExecutionProvider {
 
   void RegisterAllocator(std::shared_ptr<AllocatorManager> allocator_manager) override;
 
-  static AllocatorPtr CreateSYCLAllocator(std::shared_ptr<cl::sycl::queue> q);
+  static AllocatorPtr CreateSYCLAllocator(std::shared_ptr<cl::sycl::queue> q, OrtDevice::DeviceId device_id);
 
   std::unique_ptr<onnxruntime::IDataTransfer> GetDataTransfer() const override;
 
