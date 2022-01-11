@@ -218,6 +218,5 @@ promote:
     variables: false
   trigger:
     project: webservices/acoran-for-risc-v-documentation
-    branch: cicd_dev
-    # branch: master
+    branch: master
     strategy: depend
