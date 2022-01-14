@@ -213,3 +213,4 @@ promote:
     project: webservices/acoran-for-risc-v-documentation
     branch: cicd_dev
     # branch: master
+    strategy: depend
