@@ -40,6 +40,14 @@ SYCLExecutionProviderInfo SYCLExecutionProviderInfo::FromProviderOptions(const P
   return info;
 }
 
+SYCLExecutionProviderInfo SYCLExecutionProviderInfo::FromProviderOptions(const OrtSYCLProviderOptions& options) {
+  SYCLExecutionProviderInfo info{};
+  info.device_selector = options.device_selector;
+  info.device_vendor = options.device_vendor;
+
+  return info;
+}
+
 ProviderOptions SYCLExecutionProviderInfo::ToProviderOptions(const SYCLExecutionProviderInfo& info) {
   const ProviderOptions options{
       {sycl::provider_option_names::kDeviceSelector, MakeStringWithClassicLocale(info.device_selector)},

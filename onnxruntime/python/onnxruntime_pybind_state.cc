@@ -810,6 +810,37 @@ std::unique_ptr<IExecutionProvider> CreateExecutionProviderInstance(
 #endif
     return onnxruntime::CreateExecutionProviderFactory_CoreML(0)->CreateProvider();
 #endif
+  } else if (type == kSyclExecutionProvider) {
+#ifdef USE_SYCL
+    auto it = provider_options_map.find(type);
+    OrtSYCLProviderOptions params = OrtSYCLProviderOptions();
+    if (it != provider_options_map.end()) {
+      for (auto option : it->second) {
+        if (option.first == "device_vendor") {
+          if (!option.second.empty()) {
+            // We don't support any options yet aside from an empty string. As they get implemented, they should be checked here.
+            ORT_THROW("[ERROR] [SYCL] The value for the key 'device_vendor' should be a string.\n");
+          } else {
+            params.device_vendor = option.second.c_str();
+          }
+        } else if (option.first == "device_selector") {
+          if (!option.second.empty()) {
+            if (!(option.second == "CPU" || option.second == "GPU" || option.second == "HOST" || option.second == "ACC")) {
+              ORT_THROW("[ERROR] [SYCL] Unknown value for 'device_selector'. Supported selectors are \"CPU\", \"GPU\", \"HOST\", \"ACC\", or \"\" for default selector.");
+            } else {
+              params.device_selector = option.second.c_str();
+            }
+          } else {
+            // Default selector takes empty string as parameter, so this is valid.
+            params.device_selector = option.second.c_str();
+          }
+        } else {
+          ORT_THROW("Invalid SYCL EP option: ", option.first);
+        }
+      }
+    }
+    return onnxruntime::CreateExecutionProviderFactory_SYCL(&params)->CreateProvider();
+#endif
   } else {
     // check whether it is a dynamic load EP:
     const auto it = provider_options_map.find(type);

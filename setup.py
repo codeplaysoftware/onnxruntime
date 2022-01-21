@@ -73,6 +73,8 @@ elif parse_arg_remove_boolean(sys.argv, '--use_acl'):
     package_name = 'onnxruntime-acl'
 elif parse_arg_remove_boolean(sys.argv, '--use_armnn'):
     package_name = 'onnxruntime-armnn'
+elif parse_arg_remove_boolean(sys.argv, '--use_sycl'):
+    package_name = 'onnxruntime-sycl'
 
 # PEP 513 defined manylinux1_x86_64 and manylinux1_i686
 # PEP 571 defined manylinux2010_x86_64 and manylinux2010_i686

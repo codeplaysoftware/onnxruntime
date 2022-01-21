@@ -25,10 +25,11 @@ namespace onnxruntime {
 struct SYCLExecutionProviderInfo {
   // Conversion methods : Infos<->Options
   static SYCLExecutionProviderInfo FromProviderOptions(const ProviderOptions& options);
+  static SYCLExecutionProviderInfo FromProviderOptions(const OrtSYCLProviderOptions& options);
   static ProviderOptions ToProviderOptions(const SYCLExecutionProviderInfo& info);
 
   // Main infos
-  std::string device_selector{""};  // SYCL Device selector type : "CPU", "GPU", "HOST", "ACC", or "" for default selector
+  std::string device_selector{""};   // SYCL Device selector type : "CPU", "GPU", "HOST", "ACC", or "" for default selector
   std::string device_vendor{""};     // SYCL Device manufacturer name
   OrtDevice::DeviceId device_id{0};  // SYCL Device id (always = 0 since device is defined by selector not id)
 };
