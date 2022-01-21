@@ -11,7 +11,7 @@ RUN cd /source && \
     --sycldnn_home=${SYCL_DNN_ROOT}/build/install \
     --config ${BUILD_TYPE} --cmake_generator=Ninja \
     --parallel --skip_tests --build \
-    --update --skip_submodule_sync \
+    --update --skip_submodule_sync --build_wheel \
     --cmake_extra_defines SYCLDNN_DIR=${SYCL_DNN_ROOT}/build/install/lib/sycldnn/cmake
 
 ARG PIPELINE
@@ -21,6 +21,8 @@ RUN if [ z"$PIPELINE" = "znightly" ]; then \
         cp /source/build/Linux/${BUILD_TYPE}/libonnxruntime*.so* onnxruntime/lib && \
         cp /tmp/sycl-blas/build/libsycl_blas.so* onnxruntime/lib && \
         cp /tmp/sycl-dnn/build/install/lib/sycldnn/libsycldnn.so* onnxruntime/lib && \
+        mkdir -p onnxruntime/wheel && \
+        cp /source/build/Linux/${BUILD_TYPE}/dist/onnxruntime*.whl onnxruntime/wheel && \
         tar -czf onnxruntime.tar.gz onnxruntime && \
         rm -rf onnxruntime; \
     fi

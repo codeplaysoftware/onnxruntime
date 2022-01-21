@@ -2,7 +2,7 @@ ARG BASE_IMAGE
 FROM $BASE_IMAGE as build_base
 
 # Install dependencies
-ENV CMAKE_URL=https://github.com/Kitware/CMake/releases/download/v3.21.0/cmake-3.21.0-linux-x86_64.tar.gz
+ENV CMAKE_URL=https://github.com/Kitware/CMake/releases/download/v3.21.4/cmake-3.21.4-linux-x86_64.tar.gz
 RUN DEBIAN_FRONTEND=noninteractive apt -yq update && apt install -yq --no-install-recommends \
     ca-certificates \
     libtinfo5 \
@@ -12,7 +12,12 @@ RUN DEBIAN_FRONTEND=noninteractive apt -yq update && apt install -yq --no-instal
     git \
     cpio \
     ninja-build \
-    python-pip \
+    python3 \
+    libpython3.6-dev \
+    python3-pip \
+    python3-dev \
+    python3-setuptools \
+    python3-wheel \
     clinfo \
     libboost-all-dev \
     software-properties-common \
@@ -22,7 +27,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt -yq update && apt install -yq --no-instal
     wget --no-verbose ${CMAKE_URL} -O /tmp/cmake.tar.gz && \
     tar -zxf /tmp/cmake.tar.gz --strip=1 -C /usr --wildcards cmake*/bin/cmake cmake*/bin/ctest cmake*/share/cmake*/Modules cmake*/share/cmake*/Templates && \
     apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
-    pip install enum34
+    pip3 install flatbuffers numpy
 
 # Get ComputeCpp
 ARG COMPUTECPP_VERSION
@@ -36,8 +41,9 @@ RUN COMPUTECPP_TAR=$(echo ${COMPUTECPP_VERSION} | rev | cut -d'/' -f 1 | rev) &&
 
 # Build SYCL-BLAS
 ARG SYCLBLAS_COMMIT
+ARG SYCLBLAS_URL
 ENV SYCL_BLAS_ROOT=/tmp/sycl-blas
-RUN git clone --recursive https://github.com/codeplaysoftware/sycl-blas.git ${SYCL_BLAS_ROOT} && \
+RUN git clone --recursive ${SYCLBLAS_URL} ${SYCL_BLAS_ROOT} && \
     cd ${SYCL_BLAS_ROOT} && \
     if [ ! -z "${SYCLBLAS_COMMIT}" ]; then git checkout ${SYCLBLAS_COMMIT} && git show -s --format='%h %s'; fi && \
     mkdir -p build && cd build && \
@@ -52,8 +58,9 @@ RUN git clone --recursive https://github.com/codeplaysoftware/sycl-blas.git ${SY
 
 # Build SYCL-DNN
 ARG SYCLDNN_COMMIT
+ARG SYCLDNN_URL
 ENV SYCL_DNN_ROOT=/tmp/sycl-dnn
-RUN  git clone --recursive https://github.com/codeplaysoftware/SYCL-DNN.git ${SYCL_DNN_ROOT} && \
+RUN git clone --recursive ${SYCLDNN_URL} ${SYCL_DNN_ROOT} && \
     cd ${SYCL_DNN_ROOT} && \
     if [ ! -z "${SYCLDNN_COMMIT}" ]; then git checkout ${SYCLDNN_COMMIT} && git show -s --format='%h %s'; fi && \
     mkdir -p build && cd build && \

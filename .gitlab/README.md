@@ -35,6 +35,10 @@ The `nightly` and `riscv` pipelines support the following additional variables:
 
 - `COMPUTECPP_VERSION` - which release of ComputeCpp to use. This variable
   should be set to the direct URL to download the .tar.gz package.
+- `COMPUTEAORTA_URL` - which release of ComputeAorta to use. This variable
+  should be set to the direct URL to download the .tar.gz package.
+- `SYCLBLAS_URL` - the URL of the SYCL-BLAS repository to clone.
+- `SYCLDNN_URL` - the URL of the SYCL-DNN repository to clone.
 - `SYCLBLAS_COMMIT` - which commit of sycl-blas to use. The value should be set
   to the SHA of the commit.
 - `SYCLDNN_COMMIT` - which commit of SYCL-DNN to use. The value should be set to

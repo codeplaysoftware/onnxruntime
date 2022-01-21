@@ -56,7 +56,7 @@ def _create_session_options(optimization_level: ort.GraphOptimizationLevel,
     return so
 
 
-def _convert(model_path_or_dir: pathlib.Path, optimization_level_str: str, use_nnapi: bool, use_coreml: bool,
+def _convert(model_path_or_dir: pathlib.Path, optimization_level_str: str, use_nnapi: bool, use_coreml: bool, use_sycl: bool,
              custom_op_library: pathlib.Path, create_optimized_onnx_model: bool, allow_conversion_failures: bool,
              session_options_config_entries: typing.Dict[str, str]):
 
@@ -81,6 +81,9 @@ def _convert(model_path_or_dir: pathlib.Path, optimization_level_str: str, use_n
     if use_coreml:
         # providers are priority based, so register CoreML first
         providers.insert(0, 'CoreMLExecutionProvider')
+    if use_sycl:
+        # providers are priority based, so register CoreML first
+        providers.insert(0, 'SYCLExecutionProvider')
 
     # if the optimization level is 'all' we manually exclude the NCHWc transformer. It's not applicable to ARM
     # devices, and creates a device specific model which won't run on all hardware.
@@ -176,6 +179,12 @@ def parse_args():
                              'CoreML execution provider takes, in order to preserve those nodes in the ORT format '
                              'model.')
 
+    parser.add_argument('--use_sycl', action='store_true',
+                        help='Enable the SYCL Execution Provider when creating models and determining required '
+                             'operators. Note that this will limit the optimizations possible on nodes that the '
+                             'SYCL execution provider takes, in order to preserve those nodes in the ORT format '
+                             'model.')
+
     parser.add_argument('--optimization_level', default='all',
                         choices=['disable', 'basic', 'extended', 'all'],
                         help="Level to optimize ONNX model with, prior to converting to ORT format model. "
@@ -228,6 +237,9 @@ def convert_onnx_models_to_ort():
 
     if args.use_coreml and 'CoreMLExecutionProvider' not in ort.get_available_providers():
         raise ValueError('The CoreML Execution Provider was not included in this build of ONNX Runtime.')
+
+    if args.use_sycl and 'SYCLExecutionProvider' not in ort.get_available_providers():
+        raise ValueError('The SYCL Execution Provider was not included in this build of ONNX Runtime.')
 
     session_options_config_entries = {}
 

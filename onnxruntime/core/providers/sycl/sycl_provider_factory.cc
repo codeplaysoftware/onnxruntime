@@ -31,8 +31,7 @@ namespace onnxruntime {
 // Factory structure
 struct SYCLProviderFactory : IExecutionProviderFactory {
   SYCLProviderFactory(const SYCLExecutionProviderInfo& info)
-      : info_{info} {
-  }
+      : info_{info} {}
   ~SYCLProviderFactory() override = default;
 
   std::unique_ptr<IExecutionProvider> CreateProvider() override;
@@ -46,6 +45,11 @@ std::unique_ptr<IExecutionProvider> SYCLProviderFactory::CreateProvider() {
 }
 
 std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(const SYCLExecutionProviderInfo& info) {
+  return std::make_shared<onnxruntime::SYCLProviderFactory>(info);
+}
+
+std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(const OrtSYCLProviderOptions* params) {
+  SYCLExecutionProviderInfo info = SYCLExecutionProviderInfo::FromProviderOptions(*params);
   return std::make_shared<onnxruntime::SYCLProviderFactory>(info);
 }
 }  // namespace onnxruntime

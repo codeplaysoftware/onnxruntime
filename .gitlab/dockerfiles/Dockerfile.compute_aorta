@@ -1,18 +1,24 @@
 ARG BASE_IMAGE
 FROM $BASE_IMAGE as download_compute_aorta
 
-ENV CA_PACKAGE="ComputeAorta-riscv-llvm13-spike"
+ARG CA_PACKAGE
+ARG COMPUTEAORTA_URL
 ENV CA_ROOT="/tmp/ComputeAorta"
 
 # Get ComputeAorta
 RUN cd /tmp && \
     mkdir $CA_ROOT && \
-    wget --no-verbose https://distribution.office.codeplay.com/computeaorta/nightly/latest-${CA_PACKAGE}.txt && \
-    LATEST=`cat latest-${CA_PACKAGE}.txt` && \
-    echo $LATEST && \
-    wget --no-verbose https://distribution.office.codeplay.com/computeaorta/nightly/$LATEST && \
-    tar xzf $LATEST -C $CA_ROOT --strip=1 && \
-    rm $LATEST *.txt
+    if [ ! -z "${COMPUTEAORTA_URL}" ]; \
+    then \
+        wget --no-verbose ${COMPUTEAORTA_URL} -O ComputeAorta.tar.gz; \
+    else \
+        wget --no-verbose https://distribution.office.codeplay.com/computeaorta/nightly/latest-${CA_PACKAGE}.txt && \
+        PACKAGE_TAR=`cat latest-${CA_PACKAGE}.txt` && \
+        echo $PACKAGE_TAR && \
+        wget --no-verbose https://distribution.office.codeplay.com/computeaorta/nightly/$PACKAGE_TAR -O ComputeAorta.tar.gz; \
+    fi && \
+    tar xzf ComputeAorta.tar.gz -C $CA_ROOT --strip=1 && \
+    rm -rf ComputeAorta.tar.gz  *.txt
 
 ENV LD_LIBRARY_PATH=${CA_ROOT}/lib
 ENV OCL_ICD_FILENAMES=${CA_ROOT}/lib/libCL.so
