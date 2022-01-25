@@ -50,14 +50,20 @@ template <typename T, typename PoolType>
 Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   const Tensor* X = context->Input<Tensor>(0);
   const TensorShape& x_shape = X->Shape();
-  const int64_t N = x_shape[0];
-
+  int64_t N, C, H_in, W_in, H_out, W_out;
   size_t input_dims = x_shape.NumDimensions();
   ORT_RETURN_IF_NOT(input_dims >= 3, "Input dimension cannot be less than 3.");
 
-  const int64_t C = input_dims > 1 ? x_shape[1] : 1;
-  const int64_t H_in = input_dims > 2 ? x_shape[2] : 1;
-  const int64_t W_in = input_dims > 3 ? x_shape[3] : 1;
+  N = x_shape[0];
+#ifndef USE_SYCL_NHWC
+  C = input_dims > 1 ? x_shape[1] : 1;
+  H_in = input_dims > 2 ? x_shape[2] : 1;
+  W_in = input_dims > 3 ? x_shape[3] : 1;
+#else
+  H_in = input_dims > 1 ? x_shape[1] : 1;
+  W_in = input_dims > 2 ? x_shape[2] : 1;
+  C = input_dims > 3 ? x_shape[3] : 1;
+#endif
 
   size_t pooling_dims = input_dims - 2;
   if (pooling_dims > 3) {
@@ -83,21 +89,6 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   }
 
   std::vector<int64_t> pads = pool_attrs_.pads;
-  std::vector<int64_t> output_dims =
-      pool_attrs_.SetOutputSize(x_shape, x_shape[1], &pads);
-  TensorShape output_shape(output_dims);
-  Tensor* Y = context->Output(0, output_shape);
-  if (context->Output(1, output_shape) != nullptr) {
-    // No support for optional indices output tensor
-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
-                  "Indices output tensor not supported with SYCL EP");
-  }
-
-  // Edge case: one or more dims with value of 0
-  if (output_shape.Size() == 0) return Status::OK();
-
-  const int64_t H_out = output_dims.size() > 2 ? output_shape[2] : 1;
-  const int64_t W_out = output_dims.size() > 3 ? output_shape[3] : 1;
 
   snn::pooling::PoolingParams params;
   params.in_rows = static_cast<int>(H_in);
@@ -155,10 +146,33 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
                      1);
     }
   }
+  H_out = static_cast<int64_t>(params.out_rows);
+  W_out = static_cast<int64_t>(params.out_cols);
 
-  ORT_RETURN_IF_NOT(H_out == static_cast<int64_t>(params.out_rows) &&
-                        W_out == static_cast<int64_t>(params.out_cols),
-                    "Output size mismatch detected.");
+  std::vector<int64_t> output_dims;
+  output_dims.push_back(N);
+#ifndef USE_SYCL_NHWC
+  if (input_dims > 1) output_dims.push_back(C);
+  if (input_dims > 2) output_dims.push_back(H_out);
+  if (input_dims > 3) output_dims.push_back(W_out);
+#else
+  if (input_dims > 1) output_dims.push_back(H_out);
+  if (input_dims > 2) output_dims.push_back(W_out);
+  if (input_dims > 3) output_dims.push_back(C);
+#endif
+
+  TensorShape output_shape(output_dims);
+  Tensor* Y = context->Output(0, output_shape);
+
+  if (context->Output(1, output_shape) != nullptr) {
+    // No support for optional indices output tensor
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+                  "Indices output tensor not supported with SYCL EP");
+  }
+
+  // Edge case: one or more dims with value of 0
+  if (output_shape.Size() == 0)
+    return Status::OK();
 
   // SYCL BUFFERS
   const cl::sycl::buffer<T, 1> X_buffer =
@@ -177,6 +191,7 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   auto y_data =
       DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
+#ifndef USE_SYCL_NHWC
   // Allocating Intermediate Memory to perform computations in NHWC format
   // through SYCL-DNN
   DeviceMem input, output;
@@ -208,6 +223,17 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   // Deallocating all the memory elements used
   backend.template deallocate(input);
   backend.template deallocate(output);
+
+#else
+  // Launch Pooling kernel
+  if constexpr (PoolType::type == onnxruntime::PoolType::kAveragePool) {
+    snn::pooling::launch<T, snn::pooling::Average, snn::pooling::Forward>(
+        x_data, y_data, params, backend);
+  } else if constexpr (PoolType::type == onnxruntime::PoolType::kMaxPool) {
+    snn::pooling::launch<T, snn::pooling::Max, snn::pooling::Forward>(
+        x_data, y_data, params, backend);
+  }
+#endif
 
   return Status::OK();
 }

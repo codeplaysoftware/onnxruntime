@@ -56,8 +56,6 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   const TensorShape& x_shape = X->Shape();
   Tensor* Y = context->Output(0, x_shape);
 
-  ORT_RETURN_IF_ERROR(
-      BatchNormHelper::ValidateInputs(X, scale, B, mean, var, spatial_ == 1));
   // Training mode not supported
   if (is_training_mode_ == 1) {
     return Status(
@@ -74,10 +72,21 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   }
 
   size_t input_dims = x_shape.NumDimensions();
-  const int64_t N = x_shape[0];
-  const int64_t C = input_dims > 1 ? x_shape[1] : 1;
-  const int64_t H = input_dims > 2 ? x_shape[2] : 1;
-  const int64_t W = input_dims > 3 ? x_shape[3] : 1;
+  int64_t N, C, H, W;
+  N = x_shape[0];
+
+#ifndef USE_SYCL_NHWC
+  ORT_RETURN_IF_ERROR(
+      BatchNormHelper::ValidateInputs(X, scale, B, mean, var, spatial_ == 1));
+  C = input_dims > 1 ? x_shape[1] : 1;
+  H = input_dims > 2 ? x_shape[2] : 1;
+  W = input_dims > 3 ? x_shape[3] : 1;
+#else
+  // TODO: Implement ValidateInputs for SYCL EP for the NHWC layout
+  C = input_dims > 3 ? x_shape[3] : 1;
+  H = input_dims > 1 ? x_shape[1] : 1;
+  W = input_dims > 2 ? x_shape[2] : 1;
+#endif
 
   // SYCL BUFFERS
   const cl::sycl::buffer<T, 1> X_buffer =
@@ -112,7 +121,16 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   auto y_data =
       DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  // Allocating Intermediate Memory to perform computations in NHWC format
+  // Setting Batchnorm parameters
+  snn::batchnorm::BatchNormParams params;
+  params.batch = static_cast<int>(N);
+  params.rows = static_cast<int>(H);
+  params.cols = static_cast<int>(W);
+  params.channels = static_cast<int>(C);
+  params.epsilon = epsilon_;
+
+#ifndef USE_SYCL_NHWC
+  // Allocating Intermediate Memory to perform computations in NHWC format 
   // through SYCL-DNN
   DeviceMem input, output;
   input = backend.template allocate<T>(static_cast<size_t>(N * C * H * W));
@@ -123,14 +141,6 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   snn::transpose::convert_nchw_to_nhwc<T, Backend>(x_data, input, input_sizes,
                                                    backend);
 
-  // Setting Batchnorm parameters
-  snn::batchnorm::BatchNormParams params;
-  params.batch = static_cast<int>(N);
-  params.rows = static_cast<int>(H);
-  params.cols = static_cast<int>(W);
-  params.channels = static_cast<int>(C);
-  params.epsilon = epsilon_;
-
   // Launching Batchnorm kernel
   snn::batchnorm::launch<T, Backend, snn::batchnorm::Inference>(
       input, b_data, scale_data, mean_data, var_data, output, params, backend);
@@ -139,6 +149,15 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   const std::vector<int> output_sizes = {(int)N, (int)H, (int)W, (int)C};
   snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes,
                                                    backend);
+
+  //Deallocate the memory elements used
+  backend.template deallocate(input);
+  backend.template deallocate(output);
+
+#else
+  // Launching Batchnorm kernel
+  snn::batchnorm::launch<T, Backend, snn::batchnorm::Inference>(x_data, b_data, scale_data, mean_data, var_data, y_data, params, backend);
+#endif
 
   return Status::OK();
 }
