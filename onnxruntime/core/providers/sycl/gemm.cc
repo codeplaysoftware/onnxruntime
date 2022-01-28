@@ -142,7 +142,7 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
       // which takes the bias B as a separate input rather than expecting it to be filled
       // in advance into the output Y
       auto data_transfer = this->GetDataTransfer();
-      data_transfer->CopyTensor(*B, *Y);
+      ORT_THROW_IF_ERROR(data_transfer->CopyTensor(*B, *Y));
     }
   }
 

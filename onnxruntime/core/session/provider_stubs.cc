@@ -7,7 +7,7 @@
 #include "core/session/onnxruntime_c_api.h"
 #include "core/session/ort_apis.h"
 
-#if defined(__APPLE__) || defined(ORT_MINIMAL_BUILD)
+#if defined(__APPLE__) || defined(ORT_MINIMAL_BUILD) || !defined(USE_SYCL)
 static OrtStatus* CreateNotEnabledStatus(const std::string& ep) {
   return OrtApis::CreateStatus(ORT_FAIL, (ep + " execution provider is not enabled in this build. ").c_str());
 }

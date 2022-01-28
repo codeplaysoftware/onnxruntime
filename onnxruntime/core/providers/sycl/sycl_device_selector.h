@@ -19,7 +19,7 @@
 #include "core/providers/sycl/sycl_execution_provider_info.h"
 
 #include <string>
-#include "CL/sycl.hpp"
+#include <CL/sycl.hpp>
 
 #include <iostream>
 

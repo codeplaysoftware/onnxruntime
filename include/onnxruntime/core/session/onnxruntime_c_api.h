@@ -3299,6 +3299,17 @@ struct OrtApi {
   */
   ORT_API2_STATUS(SessionOptionsAppendExecutionProvider_MIGraphX,
                   _In_ OrtSessionOptions* options, _In_ const OrtMIGraphXProviderOptions* migraphx_options);
+
+  /** \brief Append SYCL execution provider to the session options
+   * 
+   * If SYCL is not available (due to a non SYCL enabled build, or if SYCL (DPCPP & ComputeCPP) are both not installed on the system), this function will return failure.
+   * 
+   * \param[in] options
+   * \param[in] sycl_options
+   */
+  ORT_API2_STATUS(SessionOptionsAppendExecutionProvider_SYCL,
+                  _In_ OrtSessionOptions* options, _In_ const OrtSYCLProviderOptions* sycl_options);
+  
   /// @}
 };
 
