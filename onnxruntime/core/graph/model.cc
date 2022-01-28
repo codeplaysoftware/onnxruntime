@@ -744,18 +744,6 @@ common::Status Model::LoadFromOrtFormat(const fbs::Model& fbs_model,
     }
   }
 
-  // Load the model metadata
-  if (const auto* fbs_metadata_props = fbs_model.metadata_props()) {
-    model->model_metadata_.reserve(fbs_metadata_props->size());
-    for (const auto* prop : *fbs_metadata_props) {
-      ORT_RETURN_IF(nullptr == prop, "Null entry in metadata_props. Invalid ORT format model.");
-      std::string key, value;
-      experimental::utils::LoadStringFromOrtFormat(key, prop->key());
-      experimental::utils::LoadStringFromOrtFormat(value, prop->value());
-      model->model_metadata_.insert({key, value});
-    }
-  }
-
 #if !defined(ORT_MINIMAL_BUILD)
   LOAD_STR_FROM_ORT_FORMAT(model->model_proto_, producer_name, fbs_model.producer_name());
   LOAD_STR_FROM_ORT_FORMAT(model->model_proto_, producer_version, fbs_model.producer_version());

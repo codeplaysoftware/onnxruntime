@@ -142,7 +142,6 @@ class DataTypeImpl {
   bool IsPrimitiveDataType() const {
     return type_ == GeneralType::kPrimitive;
   }
-#endif
 
   // Returns this if this is of tensor-type and null otherwise
   const TensorTypeBase* AsTensorType() const;
@@ -599,7 +598,6 @@ class SparseTensorType : public SparseTensorTypeBase {
     SparseTensorTypeHelper::Set(ToTensorDataType<elemT>(), MutableTypeProto());
   }
 };
-#endif // !defined(DISABLE_SPARSE_TENSORS)
 
 #endif  // !defined(DISABLE_SPARSE_TENSORS)
 

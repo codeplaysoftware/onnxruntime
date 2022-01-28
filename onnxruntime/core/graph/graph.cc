@@ -280,7 +280,6 @@ bool NodeArg::HasTensorOrScalarShape() const {
       // scalar's shape is empty. Thus, we don't need to
       // check shape here.
       return true;
-#endif
     case TypeProto::kSequenceType:
     case TypeProto::kOptionalType:
     case TypeProto::kMapType:
@@ -477,7 +476,6 @@ common::Status NodeArg::UpdateTypeAndShape(const ONNX_NAMESPACE::TypeProto& inpu
 
     case TypeProto::kSequenceType:
     case TypeProto::kMapType:
-    case TypeProto::kOptionalType:
     case TypeProto::kOpaqueType:
     case TypeProto::VALUE_NOT_SET:
     default:
