@@ -2203,44 +2203,6 @@ Matrix product that behaves like numpy.matmul: https://docs.scipy.org/doc/numpy-
         sparseCompatibleMatmulShapeInference(ctx, 0, 1);
       });
 
-  ONNX_CONTRIB_OPERATOR_SCHEMA(SparseToDenseMatMul)
-      .SetDomain(kMSDomain)
-      .SinceVersion(1)
-      .Input(0, "A", "2-dimensional sparse matrix A. Either COO or CSR format", "T")
-      .Input(1, "B", "N-dimensional dense matrix B", "T1")
-      .Attr(
-          "alpha",
-          "Scalar multiplier for the product of the input tensors.",
-          AttributeProto::FLOAT,
-          1.0f)
-      .Attr(
-          "transA",
-          "Whether A should be transposed on the last two dimensions before doing multiplication",
-          AttributeProto::INT,
-          static_cast<int64_t>(0))
-      .Attr(
-          "transB",
-          "Whether B should be transposed on the last two dimensions before doing multiplication",
-          AttributeProto::INT,
-          static_cast<int64_t>(0))
-      .Output(0, "Y", "Matrix multiply results", "T1")
-      .TypeConstraint(
-          "T",
-          {"sparse_tensor(float)", "sparse_tensor(double)", "sparse_tensor(int64)", "sparse_tensor(int32)",
-           "sparse_tensor(uint64)", "sparse_tensor(uint32)"},
-          "Constrain input and output types to float tensors.")
-      .TypeConstraint(
-          "T1",
-          {"tensor(float)", "tensor(double)", "tensor(int64)", "tensor(int32)",
-           "tensor(uint64)", "tensor(uint32)"},
-          "Constrain input and output types to float tensors.")
-      .TypeAndShapeInferenceFunction([](ONNX_NAMESPACE::InferenceContext& ctx) {
-        // 1- dense tensor to output
-        propagateElemTypeFromInputToOutput(ctx, 1, 0);
-        // TODO: replace with ONNX one when that one is fixed
-        sparseCompatibleMatmulShapeInference(ctx, 0, 1);
-      });
-
   ONNX_CONTRIB_OPERATOR_SCHEMA(MurmurHash3)
       .SetDomain(kMSDomain)
       .SinceVersion(1)

@@ -784,8 +784,6 @@ struct MLAS_PLATFORM {
 
 #if defined(MLAS_TARGET_AMD64_IX86) || defined(MLAS_TARGET_POWER)
     MLAS_GEMM_FLOAT_KERNEL* GemmFloatKernel;
-    const MLAS_GEMM_U8X8_DISPATCH* GemmU8S8Dispatch;
-    const MLAS_GEMM_U8X8_DISPATCH* GemmU8U8Dispatch;
 #endif
 
 #if defined(MLAS_TARGET_AMD64_IX86)
