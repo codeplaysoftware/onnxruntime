@@ -61,7 +61,7 @@ Status Flatten::ComputeInternal(OpKernelContext* context) const {
   //Copy input data to output if required
   if (target != source) {
     auto data_transfer = this->GetDataTransfer();
-    data_transfer->CopyTensor(*X, *Y);
+    ORT_THROW_IF_ERROR(data_transfer->CopyTensor(*X, *Y));
   }
 
   return Status::OK();

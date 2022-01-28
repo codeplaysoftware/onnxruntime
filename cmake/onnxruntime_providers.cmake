@@ -152,6 +152,9 @@ endif()
 if (onnxruntime_USE_STVM)
   set(PROVIDERS_STVM onnxruntime_providers_stvm)
 endif()
+if(onnxruntime_USE_SYCL)
+  set(PROVIDERS_SYCL onnxruntime_providers_sycl)
+endif()
 
 
 source_group(TREE ${ONNXRUNTIME_ROOT}/core FILES ${onnxruntime_providers_common_srcs} ${onnxruntime_providers_srcs})
@@ -1319,9 +1322,7 @@ if (onnxruntime_USE_STVM)
 endif()
 
 if (onnxruntime_USE_SYCL)
-  add_definitions("-DONNX_ML=1")  #Mandatory, otherwise : fatal error: onnx/onnx.pb.h: No such file or directory
-  add_definitions("-DONNX_NAMESPACE=onnx")
-  add_definitions("-DUSE_SYCL=1")
+  add_definitions(-DUSE_SYCL=1)
 
   file(GLOB_RECURSE onnxruntime_providers_sycl_src CONFIGURE_DEPENDS
     "${ONNXRUNTIME_ROOT}/core/providers/sycl/*.h"

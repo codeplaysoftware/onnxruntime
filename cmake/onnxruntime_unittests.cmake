@@ -501,6 +501,7 @@ set(ONNXRUNTIME_TEST_LIBS
     ${PROVIDERS_ACL}
     ${PROVIDERS_ARMNN}
     ${PROVIDERS_COREML}
+    ${PROVIDERS_SYCL}
     # ${PROVIDERS_STVM}
     onnxruntime_optimizer
     onnxruntime_providers
@@ -541,6 +542,13 @@ if(onnxruntime_USE_RKNPU)
   list(APPEND onnxruntime_test_framework_libs onnxruntime_providers_rknpu)
   list(APPEND onnxruntime_test_providers_dependencies onnxruntime_providers_rknpu)
   list(APPEND onnxruntime_test_providers_libs onnxruntime_providers_rknpu)
+endif()
+
+if(onnxruntime_USE_SYCL)
+  list(APPEND onnxruntime_test_framework_src_patterns  ${TEST_SRC_DIR}/providers/sycl/*)
+  list(APPEND onnxruntime_test_framework_libs onnxruntime_providers_sycl)
+  list(APPEND onnxruntime_test_providers_dependencies onnxruntime_providers_sycl)
+  list(APPEND onnxruntime_test_providers_libs onnxruntime_providers_sycl)
 endif()
 
 if(onnxruntime_USE_COREML)

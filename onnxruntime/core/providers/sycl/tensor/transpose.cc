@@ -53,6 +53,16 @@ namespace sycl {
       Transpose<T>);
 
 template <typename OutTy, typename InTy>
+static std::vector<OutTy> NarrowCastVector(const gsl::span<const InTy>& vec) {
+  std::vector<OutTy> out;
+  for (size_t i = 0; i < vec.size(); ++i) {
+    out.push_back(gsl::narrow_cast<OutTy>(vec[i]));
+  }
+
+  return out;
+}
+
+template <typename OutTy, typename InTy>
 static std::vector<OutTy> NarrowCastVector(const std::vector<InTy>& vec) {
   std::vector<OutTy> out;
   for (size_t i = 0; i < vec.size(); ++i) {

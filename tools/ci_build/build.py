@@ -848,6 +848,8 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
                                                               else "OFF"),
         "-Donnxruntime_NVCC_THREADS=" + str(args.parallel),
         "-Donnxruntime_ENABLE_CUDA_PROFILING=" + ("ON" if args.enable_cuda_profiling else "OFF"),
+        # SYCL EP Related
+        "-Donnxruntime_USE_SYCL=" + ("ON" if args.use_sycl else "OFF"),
     ]
     if args.external_graph_transformer_path:
         cmake_args.append("-Donnxruntime_EXTERNAL_TRANSFORMER_SRC_PATH=" + args.external_graph_transformer_path)
@@ -1731,7 +1733,7 @@ def run_nodejs_tests(nodejs_binding_dir):
 def build_python_wheel(
         source_dir, build_dir, configs, use_cuda, cuda_version, use_rocm, rocm_version, use_dnnl,
         use_tensorrt, use_openvino, use_nuphar, use_stvm, use_vitisai, use_acl, use_armnn, use_dml,
-        wheel_name_suffix, enable_training, nightly_build=False, default_training_package_device=False,
+        use_sycl, wheel_name_suffix, enable_training, nightly_build=False, default_training_package_device=False,
         use_ninja=False, build_eager_mode=False):
     for config in configs:
         cwd = get_config_build_dir(build_dir, config)

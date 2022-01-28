@@ -92,20 +92,6 @@ void DestroyStrings(void* p_data, int64_t elements) {
     ptr[i].~string();
 }
 
-void ConstructStrings(void* p_data, int64_t elements) {
-  auto* ptr = static_cast<std::string*>(p_data);
-  for (int64_t i = 0; i < elements; ++i) {
-    new (ptr + i) std::string();
-  }
-}
-
-void DestroyStrings(void* p_data, int64_t elements) {
-  using string = std::string;
-  auto* ptr = static_cast<std::string*>(p_data);
-  for (int64_t i = 0; i < elements; i++)
-    ptr[i].~string();
-}
-
 bool ProviderIsCpuBased(const std::string& provider_type) {
   return provider_type == onnxruntime::kCpuExecutionProvider ||
          provider_type == onnxruntime::kDnnlExecutionProvider ||
