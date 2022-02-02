@@ -238,11 +238,6 @@ table StringStringEntry {
   value:string;
 }
 
-table StringStringEntry {
-  key:string;
-  value:string;
-}
-
 table Model {
   ir_version:int64;
   opset_import:[OperatorSetId];

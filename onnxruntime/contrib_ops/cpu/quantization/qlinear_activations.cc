@@ -5,7 +5,7 @@
 #include "qlinear_lookup_table.h"
 
 #include "core/mlas/inc/mlas.h"
-#include "core/providers/common.h"
+#include "core/platform/threadpool.h"
 
 namespace onnxruntime {
 namespace contrib {

@@ -552,7 +552,7 @@ namespace Microsoft.ML.OnnxRuntime
                                                 IntPtr /* (OrtEnv*) */ environment,
                                                 //[MarshalAs(UnmanagedType.LPStr)]string modelPath
                                                 byte[] modelPath,
-                                                IntPtr /* (OrtSessionOptions*) */sessionOptions,
+                                                IntPtr /* (OrtSessionOptions*) */sessopnOptions,
                                                 out IntPtr /**/ session);
 
         public static DOrtCreateSession OrtCreateSession;
@@ -952,6 +952,7 @@ namespace Microsoft.ML.OnnxRuntime
                                                                   IntPtr /*(OrtValue*)*/ ortValue);
 
         public static DOrtAddInitializer OrtAddInitializer;
+
         #endregion
 
         #region RunOptions API

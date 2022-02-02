@@ -274,10 +274,6 @@ class FusionAttention(Fusion):
             attention_inputs.append("")
             attention_inputs.append(add_qk_str)
 
-        if add_qk_str is not None:
-            attention_inputs.append("")
-            attention_inputs.append(add_qk_str)
-
         attention_node = helper.make_node('Attention',
                                           inputs=attention_inputs,
                                           outputs=[output],

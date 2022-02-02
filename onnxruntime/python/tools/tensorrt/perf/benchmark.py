@@ -1106,8 +1106,6 @@ def run_onnxruntime(args, models):
                         result, mem_usage = inference_ort(args, name, sess, ep, inputs, result_template, repeat_times, batch_size, track_memory)
                     except Exception as e:
                         logger.error(e)
-                        if args.track_memory:
-                            end_memory_tracking(p, trtexec, False)
                         update_fail_model_map(model_to_fail_ep, name, ep, 'runtime error', e)
                         continue
                 

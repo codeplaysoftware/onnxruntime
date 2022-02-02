@@ -27,6 +27,8 @@
 #include <unsupported/Eigen/CXX11/src/Tensor/TensorDeviceThreadPool.h>
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
 #endif
 
 #include <benchmark/benchmark.h>

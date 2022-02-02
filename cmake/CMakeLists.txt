@@ -536,7 +536,7 @@ if (MSVC)
       set(CMAKE_ASM_MASM_FLAGS "${CMAKE_ASM_MASM_FLAGS} /safeseh")
     endif()
   endif()
-  
+
 
 
   #Always enable exception handling, even for Windows ARM

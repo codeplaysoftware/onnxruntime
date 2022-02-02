@@ -29,13 +29,6 @@ session = 'session'
 
 time_string_format = '%Y-%m-%d %H:%M:%S'
 
-# table names
-fail = 'fail'
-memory = 'memory'
-latency = 'latency'
-status = 'status'
-latency_over_time = 'latency_over_time'
-        
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
