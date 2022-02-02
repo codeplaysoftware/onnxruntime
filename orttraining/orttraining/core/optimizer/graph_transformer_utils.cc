@@ -54,7 +54,6 @@
 #include "orttraining/core/optimizer/loss_rewriter.h"
 #include "orttraining/core/optimizer/graph_transformer_registry.h"
 #include "orttraining/core/optimizer/transformer_layer_recompute.h"
-#include "orttraining/core/optimizer/loss_rewriter.h"
 
 namespace onnxruntime {
 namespace training {

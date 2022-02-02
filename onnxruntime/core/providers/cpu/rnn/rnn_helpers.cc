@@ -338,14 +338,6 @@ constexpr float tanh_bound = 10.0f;
 #define restrict
 #endif
 
-#if defined(__GNUC__) && !defined(__wasm__)
-#define restrict __restrict__
-#elif defined(_MSC_VER)
-#define restrict __restrict
-#else
-#define restrict
-#endif
-
 inline void clip_for_sigmoid_in_place(float* ps, int c) {
   for (int i = 0; i < c; i++) {
     if (ps[i] < -sigmoid_bound)
@@ -929,4 +921,3 @@ GruOutputGateFuncPtr GruOutputGateFuncByName(const std::string& func) {
 }  // namespace detail
 }  // namespace rnn
 }  // namespace onnxruntime
-

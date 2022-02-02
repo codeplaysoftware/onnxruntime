@@ -277,7 +277,7 @@ TEST(PoolTest, MaxPool1D_12_With_Index_8bits) {
 }
 
 // Used by MaxPool2D_uint8
-template <typename InputIter>
+template<typename InputIter>
 void print_vector(std::ostream& os, const std::string& txt, InputIter begin, InputIter end) {
   os << txt;
   while (begin != end) {

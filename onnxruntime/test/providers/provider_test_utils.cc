@@ -1055,21 +1055,6 @@ void OpTester::Run(
             session_object.GetSessionState().GetUsedSharedPrePackedWeightCounter();
       }
 
-      // After the model has initialized (happens in ExecuteModel),
-      // we should be able to tell how many constant initializers were pre-packed
-      // and out of these pre-packed ones how many of them used a "cached" version
-      // from the shared container.
-      // Populate these value if the user has requested this information.
-      if (number_of_pre_packed_weights_counter) {
-        *number_of_pre_packed_weights_counter =
-            session_object.GetSessionState().GetNumberOfPrepacksCounter();
-      }
-
-      if (number_of_shared_pre_packed_weights_counter) {
-        *number_of_shared_pre_packed_weights_counter =
-            session_object.GetSessionState().GetUsedSharedPrePackedWeightCounter();
-      }
-
     } else {
       for (const std::string& provider_type : all_provider_types) {
         if (excluded_provider_types.count(provider_type) > 0)
@@ -1167,21 +1152,6 @@ void OpTester::Run(
         fetches_ = ExecuteModel<InferenceSession>(
             *p_model, session_object, expect_result, expected_failure_string,
             run_options, feeds, output_names, provider_type, allow_released_onnx_opset_only);
-
-        // After the model has initialized (happens in ExecuteModel),
-        // we should be able to tell how many constant initializers were pre-packed
-        // and out of these pre-packed ones how many of them used a "cached" version
-        // from the shared container.
-        // Populate these value if the user has requested this information.
-        if (number_of_pre_packed_weights_counter) {
-          *number_of_pre_packed_weights_counter =
-              session_object.GetSessionState().GetNumberOfPrepacksCounter();
-        }
-
-        if (number_of_shared_pre_packed_weights_counter) {
-          *number_of_shared_pre_packed_weights_counter =
-              session_object.GetSessionState().GetUsedSharedPrePackedWeightCounter();
-        }
 
         // After the model has initialized (happens in ExecuteModel),
         // we should be able to tell how many constant initializers were pre-packed

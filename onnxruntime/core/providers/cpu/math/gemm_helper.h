@@ -16,7 +16,7 @@ class GemmHelper {
 
     if (trans_left) {
       M_ = left.NumDimensions() == 2 ? left[1] : left[0];
-      K_ = left.NumDimensions() == 2 ? left[0] : 1;
+      K_ = left.NumDimensions() == 2 ? left[0] :1;
     } else {
       M_ = left.NumDimensions() == 2 ? left[0] : 1;
       K_ = left.NumDimensions() == 2 ? left[1] : left[0];
@@ -58,7 +58,7 @@ class GemmHelper {
     // shape is (1,) or (1, 1), or (,)
     if (bias_shape.Size() == 1)
       return true;
-    // valid bias_shape (s) are (N,) or (1, N) or (M, 1) or (M, N),
+    // valid bias_shape (s) are (N,) or (1, N) or (M, 1) or (M, N), 
     // In last case no broadcasting needed, so don't fail it
     return ((bias_shape.NumDimensions() == 1 && bias_shape[0] == N) ||
             (bias_shape.NumDimensions() == 2 && bias_shape[0] == M && (bias_shape[1] == 1 || bias_shape[1] == N)) ||

@@ -392,6 +392,7 @@ TEST_P(ModelTest, Run) {
 
     // TensorRT EP CI uses Nvidia Tesla M60 which doesn't support fp16.
     broken_tests_keyword_set.insert({"FLOAT16"});
+
   }
 
   if (provider_name == "dml") {
@@ -546,10 +547,10 @@ TEST_P(ModelTest, Run) {
     }
 
     for (auto iter2 = broken_tests_keyword_set.begin(); iter2 != broken_tests_keyword_set.end(); ++iter2) {
-      std::string keyword = *iter2;
-      if (ToMBString(test_case_name).find(keyword) != std::string::npos) {
-        return;
-      }
+        std::string keyword = *iter2;
+        if (ToMBString(test_case_name).find(keyword) != std::string::npos) {
+          return;
+        }
     }
   }
   bool is_single_node = !model_info->GetNodeName().empty();
@@ -594,7 +595,7 @@ TEST_P(ModelTest, Run) {
               1000,
               1,
               1 << 30,
-              1,  // enable fp16
+              1, // enable fp16
               0,
               nullptr,
               0,

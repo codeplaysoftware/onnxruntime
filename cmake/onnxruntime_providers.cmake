@@ -633,11 +633,6 @@ if (onnxruntime_USE_TENSORRT)
     target_include_directories(onnxruntime_providers_tensorrt PRIVATE ${ORTTRAINING_ROOT})
   endif()
 
-  # Needed for the provider interface, as it includes training headers when training is enabled
-  if (onnxruntime_ENABLE_TRAINING OR onnxruntime_ENABLE_TRAINING_OPS)
-    target_include_directories(onnxruntime_providers_tensorrt PRIVATE ${ORTTRAINING_ROOT})
-  endif()
-
   if(APPLE)
     set_property(TARGET onnxruntime_providers_tensorrt APPEND_STRING PROPERTY LINK_FLAGS "-Xlinker -exported_symbols_list ${ONNXRUNTIME_ROOT}/core/providers/tensorrt/exported_symbols.lst")
     target_link_libraries(onnxruntime_providers_tensorrt PRIVATE nsync_cpp)
