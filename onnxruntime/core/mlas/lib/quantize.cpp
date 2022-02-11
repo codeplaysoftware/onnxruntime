@@ -870,16 +870,6 @@ MlasRequantizeOutput(
     Input += StartM * InputLeadingDimension + StartN;
     Output += StartM * OutputLeadingDimension + StartN;
 
-    if (nullptr != Bias) {
-        Bias += StartN;
-    }
-    if (PerColumnScale) {
-        Scale += StartN;
-    }
-
-    Input += StartM * InputLeadingDimension + StartN;
-    Output += StartM * OutputLeadingDimension + StartN;
-
     //
     // Step through each row of the output matrix.
     //

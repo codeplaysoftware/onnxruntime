@@ -38,10 +38,7 @@ bool DnnlDefaultNodeCapability::IsTypeSupported(const Node* node) const {
     }
   }
   return false;
-}      if (node_inputs[0]->Type()->compare(inputType) == 0) {
-        return true;
-      }
-
+}
 
 // DnnlDefaultMultiInputNodeCapability
 //-------------------------------------
