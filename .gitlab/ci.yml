@@ -7,7 +7,7 @@ variables:
   SYCLBLAS_URL: "https://github.com/codeplaysoftware/sycl-blas.git"
   SYCLBLAS_COMMIT: "927113928e8bfa509bc42935a29ae767239d31fe"
   SYCLDNN_URL: "https://github.com/codeplaysoftware/SYCL-DNN.git"
-  SYCLDNN_COMMIT: "db554c9592f86c58adddc01df101da591a61de51"
+  SYCLDNN_COMMIT: "6a637ffe0de9107eb3379257cae8554b11e49a10"
   CA_PACKAGE: "ComputeAorta-riscv-llvm13+riscv-spike"
   REPOSITORY_DEFAULT_BRANCH: "sycl_stable"
 
