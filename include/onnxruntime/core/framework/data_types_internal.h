@@ -212,7 +212,7 @@ template <typename T>
 struct PrimitiveDataType {
   static inline bool IsPrimitive(MLDataType dt_type) {
     auto prim_type = dt_type->AsPrimitiveDataType();
-    return (prim_type != nullptr && prim_type->GetDataType() == ONNX_NAMESPACE::TensorProto_DataType_STRING);
+    return (prim_type != nullptr && prim_type->GetDataType() == ToTensorProtoElementType<T>());
   }
   static inline bool IsPrimitive(const PrimitiveDataTypeBase* prim_type) {
     assert(prim_type != nullptr);
@@ -224,7 +224,7 @@ template <typename T, int dim, typename Alloc, template <typename UT, int Udim, 
 struct PrimitiveDataType<U<T, dim, Alloc>> {
   static inline bool IsPrimitive(MLDataType dt_type) {
     auto prim_type = dt_type->AsPrimitiveDataType();
-    return (prim_type != nullptr && prim_type->GetDataType() == ONNX_NAMESPACE::TensorProto_DataType_STRING);
+    return (prim_type != nullptr && prim_type->GetDataType() == ToTensorProtoElementType<T>());
   }
   static inline bool IsPrimitive(const PrimitiveDataTypeBase* prim_type) {
     assert(prim_type != nullptr);
