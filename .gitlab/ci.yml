@@ -3,7 +3,7 @@ variables:
   GIT_STRATEGY: clone
   GIT_DEPTH: 5
   REPO_PATH: research-and-development/sycl-onnx/sycl-onnx-runtime/onnxruntime
-  COMPUTECPP_VERSION: "https://distribution.office.codeplay.com/computecpp/releases/latest/ComputeCpp-CE-x86_64-linux-gnu.tar.gz"
+  COMPUTECPP_VERSION: "https://distribution.office.codeplay.com/computecpp/releases/latest/ComputeCpp-ASP-CE_RC-x86_64-linux-gnu.tar.gz"
   SYCLBLAS_URL: "https://github.com/codeplaysoftware/sycl-blas.git"
   SYCLBLAS_COMMIT: "927113928e8bfa509bc42935a29ae767239d31fe"
   SYCLDNN_URL: "https://github.com/codeplaysoftware/SYCL-DNN.git"
