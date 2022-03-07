@@ -21,7 +21,6 @@ using namespace std;
 
 namespace onnxruntime {
 
-
 // This implementation is basically useful for CPU-SYCL EPs interoperability (e.g. subgraphs/nodes
 // might be assigned to CPU EP as a fallback and this Memcpy ensures proper data movements between the two.
 Status Memcpy::Compute(OpKernelContext* ctx) const {
@@ -35,7 +34,6 @@ Status Memcpy::Compute(OpKernelContext* ctx) const {
     ORT_ENFORCE(Y != nullptr, "Memcpy: Failed to allocate output tensor.");
     return Info().GetDataTransferManager().CopyTensor(*X, *Y);
   } else {
-    // TODO : Non Tensor Data copy support to be implemented
     return Status(common::ONNXRUNTIME, common::FAIL, "Memcpy: Unsupported input type.");
   }
 }

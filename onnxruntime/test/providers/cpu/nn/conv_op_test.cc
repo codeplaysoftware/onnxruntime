@@ -113,12 +113,11 @@ TEST(ConvTest, Conv1D_1_DefaultStridesAndDilations) {
                         -0.012766072526574135f, 0.07113571465015411f, 0.061429332941770554f};
 
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape);
-  
+
   // CoreML EP requires weight to be an initializer
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
 
-/** TODO: Add support for dilations with SYCL EP **/
 #ifndef USE_SYCL
 // Conv3
 TEST(ConvTest, Conv1D_2) {
@@ -152,13 +151,12 @@ TEST(ConvTest, Conv1D_2) {
                         -0.18779152631759644f, -0.11083387583494186f};
 
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape);
-  
+
   // CoreML EP requires weight to be an initializer
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
 #endif
 
-/** TODO: Add support for dilations with SYCL EP **/
 #ifndef USE_SYCL
 // Conv1
 TEST(ConvTest, Conv1D_Bias) {
@@ -196,7 +194,6 @@ TEST(ConvTest, Conv1D_Bias) {
 }
 #endif
 
-/** TODO: Add support for uneven padding with SYCL EP **/
 #ifndef USE_SYCL
 // Conv47
 TEST(ConvTest, Conv2D_1) {
@@ -348,7 +345,6 @@ TEST(ConvTest, Conv2D_Bias_1) {
   TestConvOp(attrs, {X, W, B}, {X_shape, W_shape, B_shape}, expected_vals, Y_shape, true);
 }
 
-/** TODO: Add support for uneven padding with SYCL EP **/
 #ifndef USE_SYCL
 // Conv48
 TEST(ConvTest, Conv2D_Bias_2) {
@@ -466,7 +462,6 @@ TEST(ConvTest, Conv2D_AutoPad2) {
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
 
-/** TODO: Add support for 3D with SYCL EP **/
 #ifndef USE_SYCL
 // Conv10
 TEST(ConvTest, Conv3D_1) {
@@ -633,7 +628,6 @@ TEST(ConvTest, Conv3D_Bias) {
 }
 #endif
 
-/** TODO: Add support for groups with SYCL EP **/
 #ifndef USE_SYCL
 TEST(ConvTest, Conv2D_group) {
   ConvOpAndTestAttributes attrs = {
