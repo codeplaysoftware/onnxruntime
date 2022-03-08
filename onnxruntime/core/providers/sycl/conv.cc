@@ -76,8 +76,21 @@ Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
   const int64_t S = w_dims > 3 ? W->Shape()[3] : 1;
   ORT_RETURN_IF_ERROR(conv_attrs_.ValidateInputShape(X, W));
 
-  if (C != C_w) {
+  if (conv_attrs_.group != 1) {
+    // This check has to come before checking Channel Dimensions
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Convolution groups input not supported with SYCL EP");
+  } else if (C != C_w) {
     return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Invalid Channel Dimensions");
+  } else if (std::any_of(conv_attrs_.dilations.begin(), conv_attrs_.dilations.end(), [](int i) { return i != 1; })) {
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Convolution dilations not supported with SYCL EP");
+  } else if (x_dims > 4 && X->Shape().SizeFromDimension(4) != 1) {
+    // We don't support 3D input unless the prod(D_3,...,D_N) == 1
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Convolution 3D input not supported with SYCL EP");
+  }
+  for (size_t index = 2; index < conv_attrs_.pads.size(); index++) {
+    if (conv_attrs_.pads[index - 2] != conv_attrs_.pads[index]) {
+      return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Convolution does not support asymmetrical padding with SYCL EP");
+    }
   }
 
   std::vector<int64_t> kernel_shape;
