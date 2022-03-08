@@ -80,12 +80,14 @@ std::vector<MatMulTestData<T>> GenerateTestCases() {
        {3, 3},
        {42, 48, 54, 114, 136, 158, 186, 224, 262}});
 
+#ifndef USE_SYCL
   test_cases.push_back(
       {"test 2D special",
        {2, 2, 3},
        {3, 4},
        {2, 2, 4},
        {20, 23, 26, 29, 56, 68, 80, 92, 92, 113, 134, 155, 128, 158, 188, 218}});
+#endif
 
   test_cases.push_back(
       {"test 2D special 2",
@@ -103,14 +105,12 @@ std::vector<MatMulTestData<T>> GenerateTestCases() {
        {55, 145}});
 #endif
 
-#ifndef USE_SYCL
   test_cases.push_back(
       {"test 2D empty input",
        {3, 4},
        {4, 0},
        {3, 0},
        {}});
-#endif
 
   return test_cases;
 }
