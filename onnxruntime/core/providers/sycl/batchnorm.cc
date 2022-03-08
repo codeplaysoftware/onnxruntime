@@ -65,6 +65,7 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   const TensorShape& x_shape = X->Shape();
   Tensor* Y = context->Output(0, x_shape);
 
+  ORT_RETURN_IF_NOT((spatial_ == 1), "SYCL execution provider doesn't support non-spatial input for BatchNorm");
   ORT_RETURN_IF_ERROR(BatchNormHelper::ValidateInputs(X, scale, B, mean, var, spatial_ == 1));
   // Training mode not supported
   if (is_training_mode_ == 1) {

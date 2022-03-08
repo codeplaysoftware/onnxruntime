@@ -32,6 +32,12 @@ class BatchNorm final : public SyclKernel {
     //TODO: need to add support for training mode, spatial_ and momentum_
     // leaving these as they are not used for now
     is_training_mode_ = (info.GetAttrOrDefault<int64_t>("training_mode", 0) == 1);
+
+    // spatial or not
+    int64_t tmp_spatial;
+    if (info.GetAttr<int64_t>("spatial", &tmp_spatial).IsOK()) {
+      spatial_ = tmp_spatial;
+    }
   }
 
   Status ComputeInternal(OpKernelContext* context) const override;
