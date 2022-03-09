@@ -25,7 +25,7 @@ namespace sycl {
 
 // SYCL Allocation & De-Allocation on SYCL Device (Memory used by SYCL EP)
 template <typename T>
-inline void* SyclAlloc(size_t size, std::shared_ptr<cl::sycl::queue> q_) {
+inline void* SYCLAlloc(size_t size, std::shared_ptr<cl::sycl::queue> q_) {
   cl::sycl::buffer<T, 1>* X_buffer = nullptr;
   if (size > 0) {
     X_buffer = new cl::sycl::buffer<T, 1>{
@@ -52,22 +52,22 @@ void* SYCLAllocator::Alloc(size_t size) {
 void* SYCLAllocator::TypeAlloc(size_t size, int32_t dtype) {
   switch (dtype) {
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
-      return sycl::SyclAlloc<float>(size, q_);
+      return sycl::SYCLAlloc<float>(size, q_);
       break;
     case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE:
-      return sycl::SyclAlloc<double>(size, q_);
+      return sycl::SYCLAlloc<double>(size, q_);
       break;
     case ONNX_NAMESPACE::TensorProto_DataType_INT8:
-      return sycl::SyclAlloc<int8_t>(size, q_);
+      return sycl::SYCLAlloc<int8_t>(size, q_);
       break;
     case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
-      return sycl::SyclAlloc<uint8_t>(size, q_);
+      return sycl::SYCLAlloc<uint8_t>(size, q_);
       break;
     case ONNX_NAMESPACE::TensorProto_DataType_INT64:
-      return sycl::SyclAlloc<int64_t>(size, q_);
+      return sycl::SYCLAlloc<int64_t>(size, q_);
       break;
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
-      return sycl::SyclAlloc<cl::sycl::half>(size, q_);
+      return sycl::SYCLAlloc<cl::sycl::half>(size, q_);
       break;
     default:
       LOGS_DEFAULT(ERROR) << "Unexpected data type";
