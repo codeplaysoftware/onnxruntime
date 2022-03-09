@@ -77,7 +77,7 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
     // We don't support 3D input unless the prod(D_3,...,D_N) == 1
     return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Pooling 3D input not supported with SYCL EP");
   } else if (pool_attrs_.count_include_pad) {
-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Pooling does not support include_pad_pixel with SYCL EP");
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Pooling does not support count_include_pad with SYCL EP");
   }
   if (!pool_attrs_.global_pooling) {
     ORT_RETURN_IF_NOT(pooling_dims == pool_attrs_.kernel_shape.size(),
