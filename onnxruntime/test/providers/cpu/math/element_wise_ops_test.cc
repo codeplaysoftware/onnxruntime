@@ -252,6 +252,7 @@ TEST(MathOpTest, Add_Broadcast_0x1) {
 }
 #endif
 
+#ifndef USE_SYCL
 TEST(MathOpTest, Add_Broadcast_1x0) {
   auto run = [](bool scalar_as_initializer) {
     OpTester test("Add");
@@ -269,6 +270,7 @@ TEST(MathOpTest, Add_Broadcast_1x0) {
   run(false);
   run(true);
 }
+#endif
 
 TEST(MathOpTest, Add_Broadcast_1x1) {
   OpTester test("Add");
