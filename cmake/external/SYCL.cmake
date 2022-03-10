@@ -16,13 +16,15 @@ if(is_computecpp)
     -no-serial-memop
   )
   set(CMAKE_CXX_STANDARD 17)
+  set(SYCL_LANGUAGE_VERSION "2020" CACHE STRING "" FORCE)
   find_package(ComputeCpp REQUIRED)
+  target_compile_definitions(ComputeCpp::ComputeCpp INTERFACE SYCL_LANGUAGE_VERSION=2020)
   set(SYCL_INCLUDE_DIRS ${ComputeCpp_INCLUDE_DIRS})
 
 # DPCPP
 elseif(is_dpcpp)
   set(CMAKE_CXX_STANDARD 17)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__SYCL_DISABLE_NAMESPACE_INLINE__=ON -O3 -Xclang -cl-mad-enable")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sycl-std=2020 -D__SYCL_DISABLE_NAMESPACE_INLINE__=ON -O3 -Xclang -cl-mad-enable")
 
   set(DPCPP_SYCL_TARGET spir64-unknown-unknown-sycldevice)
 
