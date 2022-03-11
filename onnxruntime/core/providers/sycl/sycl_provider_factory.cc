@@ -30,8 +30,7 @@ namespace onnxruntime {
 
 // Factory structure
 struct SYCLProviderFactory : IExecutionProviderFactory {
-  SYCLProviderFactory(const SYCLExecutionProviderInfo& info)
-      : info_{info} {}
+  SYCLProviderFactory(const SYCLExecutionProviderInfo& info) : info_{info} {}
   ~SYCLProviderFactory() override = default;
 
   std::unique_ptr<IExecutionProvider> CreateProvider() override;
@@ -44,12 +43,15 @@ std::unique_ptr<IExecutionProvider> SYCLProviderFactory::CreateProvider() {
   return std::make_unique<SYCLExecutionProvider>(info_);
 }
 
-std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(const SYCLExecutionProviderInfo& info) {
+std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(
+    const SYCLExecutionProviderInfo& info) {
   return std::make_shared<onnxruntime::SYCLProviderFactory>(info);
 }
 
-std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(const OrtSYCLProviderOptions* params) {
-  SYCLExecutionProviderInfo info = SYCLExecutionProviderInfo::FromProviderOptions(*params);
+std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(
+    const OrtSYCLProviderOptions* params) {
+  SYCLExecutionProviderInfo info =
+      SYCLExecutionProviderInfo::FromProviderOptions(*params);
   return std::make_shared<onnxruntime::SYCLProviderFactory>(info);
 }
 }  // namespace onnxruntime
@@ -60,7 +62,8 @@ ORT_API_STATUS_IMPL(OrtSessionOptionsAppendExecutionProvider_SYCL,
   info.device_id = 0;         // 0 by default
   info.device_selector = "";  // Default SYCL device
   info.device_vendor = "";    // No specific vendor
-  options->provider_factories.push_back(onnxruntime::CreateExecutionProviderFactory_SYCL(info));
+  options->provider_factories.push_back(
+      onnxruntime::CreateExecutionProviderFactory_SYCL(info));
   return nullptr;
 }
 
@@ -68,18 +71,23 @@ ORT_API_STATUS_IMPL(OrtApis::SessionOptionsAppendExecutionProvider_SYCL,
                     _In_ OrtSessionOptions* options,
                     _In_ const OrtSYCLProviderOptions* sycl_options) {
   SYCLExecutionProviderInfo info{};
-  info.device_id = 0;                                                                                // Always set to 0
-  info.device_selector = sycl_options->device_selector;                                              // Device Selector (string) ["GPU", "CPU", "ACC" , "HOST", ""]
-  info.device_vendor = (sycl_options->device_vendor == nullptr) ? "" : sycl_options->device_vendor;  // Device Vendor (string)
+  info.device_id = 0;  // Always set to 0
+  info.device_selector =
+      sycl_options->device_selector;  // Device Selector (string) ["GPU", "CPU",
+                                      // "ACC" , "HOST", ""]
+  info.device_vendor =
+      (sycl_options->device_vendor == nullptr)
+          ? ""
+          : sycl_options->device_vendor;  // Device Vendor (string)
 
-  // Upper case formatting (used for string equality check when selecting SYCL device)
-  std::for_each(info.device_selector.begin(), info.device_selector.end(), [](char& c) {
-    c = ::toupper(c);
-  });
-  std::for_each(info.device_vendor.begin(), info.device_vendor.end(), [](char& c) {
-    c = ::toupper(c);
-  });
+  // Upper case formatting (used for string equality check when selecting SYCL
+  // device)
+  std::for_each(info.device_selector.begin(), info.device_selector.end(),
+                [](char& c) { c = ::toupper(c); });
+  std::for_each(info.device_vendor.begin(), info.device_vendor.end(),
+                [](char& c) { c = ::toupper(c); });
 
-  options->provider_factories.push_back(onnxruntime::CreateExecutionProviderFactory_SYCL(info));
+  options->provider_factories.push_back(
+      onnxruntime::CreateExecutionProviderFactory_SYCL(info));
   return nullptr;
 }

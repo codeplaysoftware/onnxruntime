@@ -35,9 +35,11 @@ class SYCLExecutionProvider : public IExecutionProvider {
 
   AllocatorPtr GetAllocator(int id, OrtMemType mem_type) const override;
 
-  void RegisterAllocator(std::shared_ptr<AllocatorManager> allocator_manager) override;
+  void RegisterAllocator(
+      std::shared_ptr<AllocatorManager> allocator_manager) override;
 
-  static AllocatorPtr CreateSYCLAllocator(std::shared_ptr<cl::sycl::queue> q, OrtDevice::DeviceId device_id);
+  static AllocatorPtr CreateSYCLAllocator(std::shared_ptr<cl::sycl::queue> q,
+                                          OrtDevice::DeviceId device_id);
 
   std::unique_ptr<onnxruntime::IDataTransfer> GetDataTransfer() const override;
 

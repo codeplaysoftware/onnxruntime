@@ -24,9 +24,9 @@ namespace sycl {
 
 class Reshape final : public SyclKernel {
  public:
-  Reshape(const OpKernelInfo& info) : SyclKernel(info),
-                                      allow_zero_(info.GetAttrOrDefault<int64_t>("allowzero", 0) == 1) {
-  }
+  Reshape(const OpKernelInfo& info)
+      : SyclKernel(info),
+        allow_zero_(info.GetAttrOrDefault<int64_t>("allowzero", 0) == 1) {}
 
   Status ComputeInternal(OpKernelContext* context) const override;
 

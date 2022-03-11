@@ -24,18 +24,22 @@
 
 namespace onnxruntime {
 
-// Base SYCL EP Allocator using buffer, targeting devices of type OrtDevice::SYCL_DEVICE
-// with memory type OrtDevice::MemType::SYCL_MEMORY
+// Base SYCL EP Allocator using buffer, targeting devices of type
+// OrtDevice::SYCL_DEVICE with memory type OrtDevice::MemType::SYCL_MEMORY
 class SYCLAllocator : public IAllocator {
  public:
-  SYCLAllocator(std::shared_ptr<cl::sycl::queue> q, OrtDevice::DeviceId device_id) : IAllocator(OrtMemoryInfo("sycl", OrtAllocatorType::OrtDeviceAllocator, OrtDevice(OrtDevice::SYCL_DEVICE, OrtDevice::MemType::SYCL_MEMORY, device_id), device_id, OrtMemTypeDefault)), q_{q} {
-  }
+  SYCLAllocator(std::shared_ptr<cl::sycl::queue> q,
+                OrtDevice::DeviceId device_id)
+      : IAllocator(
+            OrtMemoryInfo("sycl", OrtAllocatorType::OrtDeviceAllocator,
+                          OrtDevice(OrtDevice::SYCL_DEVICE,
+                                    OrtDevice::MemType::SYCL_MEMORY, device_id),
+                          device_id, OrtMemTypeDefault)),
+        q_{q} {}
 
   void* Alloc(size_t) override;
   void Free(void*) override;
-  bool SupportPointerArithmetic() const override {
-    return false;
-  }
+  bool SupportPointerArithmetic() const override { return false; }
   void* TypeAlloc(size_t, int32_t) override;
 
  private:
@@ -49,11 +53,10 @@ class SYCLAllocator : public IAllocator {
 class SYCLHostAllocator : public IAllocator {
  public:
   SYCLHostAllocator(OrtDevice::DeviceId device_id, const char* name)
-      : IAllocator(
-            OrtMemoryInfo(name, OrtAllocatorType::OrtDeviceAllocator,
-                          OrtDevice(OrtDevice::CPU, OrtDevice::MemType::DEFAULT, device_id),
-                          device_id, OrtMemTypeCPUOutput)) {
-  }
+      : IAllocator(OrtMemoryInfo(
+            name, OrtAllocatorType::OrtDeviceAllocator,
+            OrtDevice(OrtDevice::CPU, OrtDevice::MemType::DEFAULT, device_id),
+            device_id, OrtMemTypeCPUOutput)) {}
 
   void* Alloc(size_t size) override;
   void Free(void* p) override;

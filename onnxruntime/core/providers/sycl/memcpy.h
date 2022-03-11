@@ -24,8 +24,9 @@
 
 namespace onnxruntime {
 
-// Memcpy implements copy operation as an OpKernel enables creating copy nodes and place them
-// between EPs involving different types of devices and/or memories.
+// Memcpy implements copy operation as an OpKernel enables creating copy nodes
+// and place them between EPs involving different types of devices and/or
+// memories.
 class Memcpy final : public OpKernel {
  public:
   Memcpy(const OpKernelInfo& info) : OpKernel{info} {}

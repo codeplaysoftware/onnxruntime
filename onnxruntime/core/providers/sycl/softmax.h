@@ -47,7 +47,8 @@ class Softmax final : public SyclKernel {
   Status ComputeInternal(OpKernelContext* context) const override;
 
  private:
-  int axis_;   // Reduction axis (has different semantics depending on opset version)
+  int axis_;   // Reduction axis (has different semantics depending on opset
+               // version)
   int opset_;  // onnxruntime Operators Set Version
 };
 }  // namespace sycl
