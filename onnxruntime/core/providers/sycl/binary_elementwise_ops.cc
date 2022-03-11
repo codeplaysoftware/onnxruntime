@@ -59,6 +59,11 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
   const Tensor* A = context->Input<Tensor>(0);
   const Tensor* B = context->Input<Tensor>(1);
 
+  // No support for broadcasting
+  if (A->Shape() != B->Shape()) {
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Broadcasting not supported with SYCL EP binary elementwise operations");
+  }
+
   Tensor* Y = context->Output(0, A->Shape());
 
   size_t count1 = A->SizeInBytes() / sizeof(T);

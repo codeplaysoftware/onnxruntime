@@ -288,7 +288,6 @@ TEST(BatchNormTest, BatchNorm2d_Pytorch) {
   TestBatchNorm(input_data_map, input_shapes_map, epsilon, expected_output, input_shape, true);
 }
 
-/** TODO: Add support for 3D input with SYCL EP **/
 #ifndef USE_SYCL
 TEST(BatchNormTest, BatchNorm3d_Pytorch) {
   vector<float> X{2.02384f, -0.935186f, 0.488569f, -0.513934f, -1.27082f, -0.131913f, -1.806f, -0.37904f, 0.667796f,
@@ -575,7 +574,6 @@ TEST(BatchNormTest, InvalidVarDim) {
                 "Invalid input var");
 }
 
-/** TODO: Add support for Non-Spatial input with SYCL EP **/
 #ifndef USE_SYCL
 TEST(BatchNormTest, NonSpatial_Simple) {
   vector<float> X{1.f, 2.f, 3.f, 4.f, 1.f, 2.f, 3.f, 4.f};
@@ -743,7 +741,6 @@ TEST(BatchNormTest, BatchNorm2d_fp16) {
 #endif
 
 // TODO fix flaky test for CUDA
-/** TODO: Add support for Training Mode with SYCL EP **/
 #ifndef USE_SYCL
 #ifdef BATCHNORM_INCLUDE_TRAINING_SUPPORT
 TEST(BatchNormTest, ForwardTrainingTestWithSavedOutputsOpset9) {
