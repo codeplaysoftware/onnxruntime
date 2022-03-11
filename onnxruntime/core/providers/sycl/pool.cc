@@ -71,6 +71,13 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   size_t pooling_dims = input_dims - 2;
   if (pooling_dims > 3) {
     return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Unsupported pooling size.");
+  } else if (std::any_of(pool_attrs_.dilations.begin(), pool_attrs_.dilations.end(), [](int i) { return i != 1; })) {
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Pooling dilations not supported with SYCL EP");
+  } else if (x_shape.NumDimensions() > 4 && x_shape.SizeFromDimension(4) != 1) {
+    // We don't support 3D input unless the prod(D_3,...,D_N) == 1
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Pooling 3D input not supported with SYCL EP");
+  } else if (pool_attrs_.count_include_pad) {
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Pooling does not support count_include_pad with SYCL EP");
   }
   if (!pool_attrs_.global_pooling) {
     ORT_RETURN_IF_NOT(pooling_dims == pool_attrs_.kernel_shape.size(),
@@ -81,6 +88,10 @@ Status Pool<T, PoolType>::ComputeInternal(OpKernelContext* context) const {
   std::vector<int64_t> output_dims = pool_attrs_.SetOutputSize(x_shape, x_shape[1], &pads);
   TensorShape output_shape(output_dims);
   Tensor* Y = context->Output(0, output_shape);
+  if (context->Output(1, output_shape) != nullptr) {
+    // No support for optional indices output tensor
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Indices output tensor not supported with SYCL EP");
+  }
 
   // Edge case: one or more dims with value of 0
   if (output_shape.Size() == 0)

@@ -69,6 +69,11 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   // Training mode not supported
   if (is_training_mode_ == 1) {
     return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "BatchNormalization Training mode not supported with SYCL EP");
+  } else if (spatial_ != 1) {
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "BatchNormalization non-spatial input not supported with SYCL EP");
+  } else if (x_shape.NumDimensions() > 4 && x_shape.SizeFromDimension(4) != 1) {
+    // We don't support 3D input unless the prod(D_3,...,D_N) == 1
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "BatchNormalization 3D input not supported with SYCL EP");
   }
 
   size_t input_dims = x_shape.NumDimensions();

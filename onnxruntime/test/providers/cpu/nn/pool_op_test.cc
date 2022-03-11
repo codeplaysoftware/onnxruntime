@@ -114,7 +114,6 @@ TEST(PoolTest, MaxPool_F16) {
 }
 #endif
 
-/** TODO: Add support for optional 'indicies' output tensor with SYCL EP **/
 #ifndef USE_SYCL
 static void MaxPool_8_WithIndexTest(bool has_index, int64_t storage_order = 0) {
   OpTester test("MaxPool", 8);
@@ -168,7 +167,6 @@ static void MaxPool_8_WithIndexTest(bool has_index, int64_t storage_order = 0) {
 }
 #endif
 
-/** TODO: Add support for optional 'indicies' output tensor with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool_8_With_Index) {
   MaxPool_8_WithIndexTest(false);                      // row major
@@ -195,7 +193,6 @@ TEST(PoolTest, MaxPool1D) {
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
 
-/** TODO: Add support for optional 'indicies' output tensor with SYCL EP **/
 #ifndef USE_SYCL
 static void MaxPool1D_8_WithIndexTest(int64_t storage_order) {
   OpTester test("MaxPool", 8);
@@ -219,7 +216,6 @@ static void MaxPool1D_8_WithIndexTest(int64_t storage_order) {
 }
 #endif
 
-/** TODO: Add support for optional 'indicies' output tensor with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool1D_8_With_Index) {
   MaxPool1D_8_WithIndexTest(0 /*storage_order*/);
@@ -315,7 +311,6 @@ TEST(PoolTest, MaxPool2D_uint8) {
 #endif
 }
 
-/** TODO: Add support for dilation with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_1d) {
   OpTester test("MaxPool", 10);
@@ -398,7 +393,6 @@ TEST(PoolTest, MaxPool_DefaultDilations_uint8) {
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
 
-/** TODO: Add support for dilation with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_DilationPadding_1d) {
   OpTester test("MaxPool", 10);
@@ -421,7 +415,6 @@ TEST(PoolTest, MaxPool_10_DilationPadding_1d) {
 }
 #endif
 
-/** TODO: Add support for dilation with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_2d) {
   OpTester test("MaxPool", 10);
@@ -447,7 +440,6 @@ TEST(PoolTest, MaxPool_10_Dilation_2d) {
 }
 #endif
 
-/** TODO: Add support for dilation with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_2d_int8) {
   OpTester test("MaxPool", 12);
@@ -473,7 +465,6 @@ TEST(PoolTest, MaxPool_10_Dilation_2d_int8) {
 }
 #endif
 
-/** TODO: Add support for dilation with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_DilationPadding_2d) {
   OpTester test("MaxPool", 10);
@@ -504,7 +495,6 @@ TEST(PoolTest, MaxPool_10_DilationPadding_2d) {
 }
 #endif
 
-/** TODO: Add support for dilation with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_Ceil0_2d) {
   OpTester test("MaxPool", 10);
@@ -553,7 +543,6 @@ TEST(PoolTest, MaxPool_12_Dilation_Ceil0_2d_int8) {
 }
 #endif
 
-/** TODO: Add support for dilation with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_Dilation_Ceil1_2d) {
   OpTester test("MaxPool", 10);
@@ -580,7 +569,6 @@ TEST(PoolTest, MaxPool_10_Dilation_Ceil1_2d) {
 }
 #endif
 
-/** TODO: Add support for dilation with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, MaxPool_10_DilationPadding_3d) {
   OpTester test("MaxPool", 10);
@@ -694,7 +682,6 @@ TEST(PoolTest, GlobalMaxPool) {
   test.Run();
 }
 
-/** TODO: Add support for 3D MaxPool with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, GlobalMaxPool3D) {
   OpTester test("GlobalMaxPool");
@@ -854,7 +841,6 @@ TEST(PoolTest, AveragePool) {
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
 }
 
-/** TODO: Add support for Pad Pixel with SYCL EP **/
 #ifndef USE_SYCL
 TEST(PoolTest, AveragePool_IncludePadPixel) {
   OpTester test("AveragePool");

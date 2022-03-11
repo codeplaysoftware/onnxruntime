@@ -69,6 +69,11 @@ Status MatMul<T>::ComputeInternal(OpKernelContext* context) const {
   const size_t N = static_cast<size_t>(helper.N());
   const size_t K = static_cast<size_t>(helper.K());
 
+  // No support for broadcasting or padding
+  if (A->Shape().NumDimensions() != B->Shape().NumDimensions()) {
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Matmul padding/broadcasting not supported with SYCL EP");
+  }
+
   // SYCL BUFFERS
   const cl::sycl::buffer<T, 1> A_buffer = *A->template Ptr<cl::sycl::buffer<T, 1>>();
   const cl::sycl::buffer<T, 1> B_buffer = *B->template Ptr<cl::sycl::buffer<T, 1>>();

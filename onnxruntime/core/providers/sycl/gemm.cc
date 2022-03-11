@@ -137,10 +137,6 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
       backend.deallocate(ones);
 
     } else {
-      // TODO : Copy operation to be removed for performance considerations
-      // This is a temporary work-around until a SYCL DNN proper operation is implemented
-      // which takes the bias B as a separate input rather than expecting it to be filled
-      // in advance into the output Y
       auto data_transfer = this->GetDataTransfer();
       ORT_THROW_IF_ERROR(data_transfer->CopyTensor(*B, *Y));
     }
