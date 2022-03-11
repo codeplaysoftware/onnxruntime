@@ -29,9 +29,10 @@ class BatchNorm final : public SyclKernel {
   BatchNorm(const OpKernelInfo& info) : SyclKernel(info) {
     ORT_ENFORCE(info.GetAttr<float>("epsilon", &epsilon_).IsOK());
 
-    //TODO: need to add support for training mode, spatial_ and momentum_
+    // TODO: need to add support for training mode, spatial_ and momentum_
     // leaving these as they are not used for now
-    is_training_mode_ = (info.GetAttrOrDefault<int64_t>("training_mode", 0) == 1);
+    is_training_mode_ =
+        (info.GetAttrOrDefault<int64_t>("training_mode", 0) == 1);
 
     // spatial or not
     int64_t tmp_spatial;
@@ -45,7 +46,7 @@ class BatchNorm final : public SyclKernel {
  private:
   float epsilon_;
   int64_t spatial_ = 1;        // default as per spec
-  bool is_training_mode_ = 0;  //default as per spec
+  bool is_training_mode_ = 0;  // default as per spec
 };
 
 }  // namespace sycl

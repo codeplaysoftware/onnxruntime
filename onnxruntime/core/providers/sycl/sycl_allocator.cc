@@ -38,13 +38,13 @@ inline void* SYCLAlloc(size_t size, std::shared_ptr<cl::sycl::queue> q_) {
 }  // namespace sycl
 
 void* SYCLAllocator::Alloc(size_t size) {
-  //Need to keep this default type as FLOAT
-  //to make sure enough memory is allocated
-  //for the second pass onwards, otherwise,
-  //we get segmentation fault
+  // Need to keep this default type as FLOAT
+  // to make sure enough memory is allocated
+  // for the second pass onwards, otherwise,
+  // we get segmentation fault
 
-  //The problematic call to Alloc comes from
-  //execution_frame.cc:418
+  // The problematic call to Alloc comes from
+  // execution_frame.cc:418
   auto type = ONNX_NAMESPACE::TensorProto_DataType_FLOAT;
   return TypeAlloc(size, type);
 }
@@ -88,13 +88,12 @@ void* SYCLHostAllocator::Alloc(size_t size) {
   void* p = nullptr;
   if (size > 0) {
     p = malloc(size);
-    LOGS_DEFAULT(INFO) << "Memory allocated by SYCL EP on CPU device [" << size << " bytes ]";
+    LOGS_DEFAULT(INFO) << "Memory allocated by SYCL EP on CPU device [" << size
+                       << " bytes ]";
   }
   return p;
 }
 
-void SYCLHostAllocator::Free(void* p) {
-  free(p);
-}
+void SYCLHostAllocator::Free(void* p) { free(p); }
 
 }  // namespace onnxruntime

@@ -30,9 +30,11 @@ class ReduceMean final : public SyclKernel {
     int64_t keepdims = 1;
     ORT_ENFORCE(info.GetAttr("keepdims", &keepdims).IsOK());
     keepdims_ = (keepdims == 1);
-    int64_t noop_with_empty_axes = info.GetAttrOrDefault<int64_t>("noop_with_empty_axes", 0);
+    int64_t noop_with_empty_axes =
+        info.GetAttrOrDefault<int64_t>("noop_with_empty_axes", 0);
     noop_with_empty_axes_ = (noop_with_empty_axes == 1);
-    int64_t select_last_index = info.GetAttrOrDefault<int64_t>("select_last_index", 0);
+    int64_t select_last_index =
+        info.GetAttrOrDefault<int64_t>("select_last_index", 0);
     select_last_index_ = (select_last_index != 0);
   }
   Status ComputeInternal(OpKernelContext* context) const override;

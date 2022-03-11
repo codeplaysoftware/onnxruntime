@@ -23,6 +23,7 @@
 
 namespace onnxruntime {
 
-std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(const SYCLExecutionProviderInfo& info);
+std::shared_ptr<IExecutionProviderFactory> CreateExecutionProviderFactory_SYCL(
+    const SYCLExecutionProviderInfo& info);
 
 }  // namespace onnxruntime

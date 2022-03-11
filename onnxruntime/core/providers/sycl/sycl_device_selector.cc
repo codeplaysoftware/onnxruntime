@@ -53,16 +53,17 @@ int sycl_device_selector::operator()(const cl::sycl::device& dev) const {
   // since device of target nature will be used but its vendor
   // doesn't match the name provided by user.
   if (score) {
-    one_device_available_ = true;  // At least one device will be selected (true)
+    one_device_available_ =
+        true;  // At least one device will be selected (true)
     if (device_vendor_.size() > 0) {
       auto deviceInfo = dev.get_info<cl::sycl::info::device::vendor>();
 
-      for_each(deviceInfo.begin(), deviceInfo.end(), [](char& c) {
-        c = ::toupper(c);
-      });
+      for_each(deviceInfo.begin(), deviceInfo.end(),
+               [](char& c) { c = ::toupper(c); });
 
-      bool vendor_match = deviceInfo.find(device_vendor_) != string::npos;  // true if device's vendor is found
-      score += (int)vendor_match;                                           // score = 2 if device's vendor is matched
+      bool vendor_match = deviceInfo.find(device_vendor_) !=
+                          string::npos;  // true if device's vendor is found
+      score += (int)vendor_match;  // score = 2 if device's vendor is matched
     }
   }
 

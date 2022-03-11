@@ -30,16 +30,19 @@ namespace onnxruntime {
 namespace sycl {
 
 // ---------------------
-// Base class for SYCL kernels (Needed to access EP's sycl queue when submitting kernels)
+// Base class for SYCL kernels (Needed to access EP's sycl queue when submitting
+// kernels)
 // ---------------------
 class SyclKernel : public OpKernel {
  private:
   SYCLExecutionProvider* provider_;
 
  public:
-  explicit SyclKernel(const OpKernelInfo& info) : OpKernel(info),
-                                                  provider_(const_cast<SYCLExecutionProvider*>(static_cast<const SYCLExecutionProvider*>(info.GetExecutionProvider()))) {
-  }
+  explicit SyclKernel(const OpKernelInfo& info)
+      : OpKernel(info),
+        provider_(const_cast<SYCLExecutionProvider*>(
+            static_cast<const SYCLExecutionProvider*>(
+                info.GetExecutionProvider()))) {}
 
   Status Compute(OpKernelContext* p_op_kernel_context) const override {
     auto s = ComputeInternal(p_op_kernel_context);
@@ -51,19 +54,18 @@ class SyclKernel : public OpKernel {
     return s;
   }
 
-  inline void wait() const {
-    Queue()->wait_and_throw();
-  }
+  inline void wait() const { Queue()->wait_and_throw(); }
 
-  virtual Status ComputeInternal(OpKernelContext* p_op_kernel_context) const = 0;
+  virtual Status ComputeInternal(
+      OpKernelContext* p_op_kernel_context) const = 0;
 
   inline cl::sycl::queue* Queue() const { return provider_->GetQueue(); };
 
-  inline std::unique_ptr<onnxruntime::IDataTransfer> GetDataTransfer() const { return provider_->GetDataTransfer(); };
+  inline std::unique_ptr<onnxruntime::IDataTransfer> GetDataTransfer() const {
+    return provider_->GetDataTransfer();
+  };
 
-  inline int GetDeviceId() const {
-    return provider_->GetDeviceId();
-  }
+  inline int GetDeviceId() const { return provider_->GetDeviceId(); }
 };
 }  // namespace sycl
 }  // namespace onnxruntime
