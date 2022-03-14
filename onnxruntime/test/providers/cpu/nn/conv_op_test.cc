@@ -59,6 +59,24 @@ void TestConvOp(const ConvOpAndTestAttributes& attributes,
   std::unordered_set<std::string> excluded_providers(attributes.excluded_providers);
   // Disable TensorRT because weight as input is not supported
   excluded_providers.insert(kTensorrtExecutionProvider);
+  if (attributes.group != 1) {
+    // SYCL EP: No support for groups
+    excluded_providers.insert(kSyclExecutionProvider);
+  }
+  if (std::any_of(attributes.dilations.begin(), attributes.dilations.end(), [](int i) { return i != 1; })) {
+    // SYCL EP: No support for dilations
+    excluded_providers.insert(kSyclExecutionProvider);
+  }
+  if (input_shapes[0].size() > 4 && std::any_of(std::next(input_shapes[0].begin(), 4), input_shapes[0].end(), [](int i) { return i != 1; })) {
+    // SYCL EP: No support for 3D input, unless can be flattened
+    excluded_providers.insert(kSyclExecutionProvider);
+  }
+  for (size_t index = 2; index < attributes.pads.size(); index++) {
+    if (attributes.pads[index - 2] != attributes.pads[index]) {
+      // SYCL EP: No support for uneven padding
+      excluded_providers.insert(kSyclExecutionProvider);
+    }
+  }
 
   test.Run(expect_result, err_str, excluded_providers);
 }
@@ -118,7 +136,6 @@ TEST(ConvTest, Conv1D_1_DefaultStridesAndDilations) {
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
 
-#ifndef USE_SYCL
 // Conv3
 TEST(ConvTest, Conv1D_2) {
   ConvOpAndTestAttributes attrs = {
@@ -155,9 +172,7 @@ TEST(ConvTest, Conv1D_2) {
   // CoreML EP requires weight to be an initializer
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
-#endif
 
-#ifndef USE_SYCL
 // Conv1
 TEST(ConvTest, Conv1D_Bias) {
   ConvOpAndTestAttributes attrs = {
@@ -192,9 +207,7 @@ TEST(ConvTest, Conv1D_Bias) {
   // CoreML EP requires weight to be an initializer
   TestConvOp(attrs, {X, W, B}, {X_shape, W_shape, B_shape}, expected_vals, Y_shape, true);
 }
-#endif
 
-#ifndef USE_SYCL
 // Conv47
 TEST(ConvTest, Conv2D_1) {
   ConvOpAndTestAttributes attrs = {
@@ -224,7 +237,6 @@ TEST(ConvTest, Conv2D_1) {
   // NNAPI/CoreML EP requires weight to be an initializer
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
-#endif
 
 TEST(ConvTest, Conv1D_Invalid_Input_Shape) {
   ConvOpAndTestAttributes attrs = {
@@ -345,7 +357,6 @@ TEST(ConvTest, Conv2D_Bias_1) {
   TestConvOp(attrs, {X, W, B}, {X_shape, W_shape, B_shape}, expected_vals, Y_shape, true);
 }
 
-#ifndef USE_SYCL
 // Conv48
 TEST(ConvTest, Conv2D_Bias_2) {
   ConvOpAndTestAttributes attrs = {
@@ -396,7 +407,6 @@ TEST(ConvTest, Conv2D_Bias_2) {
 
   TestConvOp(attrs, {X, W, B}, {X_shape, W_shape, B_shape}, expected_vals, Y_shape, true);
 }
-#endif
 
 TEST(ConvTest, Conv2D_AutoPad1) {
   ConvOpAndTestAttributes attrs = {
@@ -462,7 +472,6 @@ TEST(ConvTest, Conv2D_AutoPad2) {
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
 
-#ifndef USE_SYCL
 // Conv10
 TEST(ConvTest, Conv3D_1) {
   ConvOpAndTestAttributes attrs = {
@@ -626,9 +635,7 @@ TEST(ConvTest, Conv3D_Bias) {
                         -0.5359901785850525f, -0.48090484738349915f, -0.38603779673576355f, -0.4991581439971924f};
   TestConvOp(attrs, {X, W, B}, {X_shape, W_shape, B_shape}, expected_vals, Y_shape);
 }
-#endif
 
-#ifndef USE_SYCL
 TEST(ConvTest, Conv2D_group) {
   ConvOpAndTestAttributes attrs = {
       "",                           // auto_pad
@@ -652,7 +659,6 @@ TEST(ConvTest, Conv2D_group) {
   // NNAPI/CoreML EP requires weight to be an initializer
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
-#endif
 
 TEST(ConvTest, ConvDimWithZero) {
   ConvOpAndTestAttributes attrs = {
