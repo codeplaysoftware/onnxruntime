@@ -151,8 +151,6 @@ TEST(MathOpTest, Add_double) {
   test.Run();
 }
 
-/** TODO: Add support for broadcasting with SYCL EP **/
-#ifndef USE_SYCL
 TEST(MathOpTest, Add_Broadcast_Axis) {
   OpTester test("Add");
 
@@ -163,16 +161,13 @@ TEST(MathOpTest, Add_Broadcast_Axis) {
   test.AddInput<float>("A", dims, lhs_values);
   test.AddInput<float>("B", {3, 1}, rhs_values);
   test.AddOutput<float>("C", dims, out_values);
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "");
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 
 #ifdef USE_CUDA
   TestFloat16("Add", dims, lhs_values, {3, 1}, rhs_values, dims, out_values);
 #endif
 }
-#endif
 
-/** TODO: Add support for broadcasting with SYCL EP **/
-#ifndef USE_SYCL
 TEST(MathOpTest, Add_Broadcast_MultidirectionalAB) {
   OpTester test("Add");
   std::initializer_list<float> lhs_values{3.0f, 2.0f, 1.0f};
@@ -188,17 +183,14 @@ TEST(MathOpTest, Add_Broadcast_MultidirectionalAB) {
             kOpenVINOExecutionProvider});  // OpenVINO: disabled temporarily due to accurarcy issues
 #else
   test.Run(OpTester::ExpectResult::kExpectSuccess, "",
-           {kTensorrtExecutionProvider});  // TensorRT: got C with shape [3, 1]
+           {kTensorrtExecutionProvider, kSyclExecutionProvider});  // TensorRT: got C with shape [3, 1]
 #endif
 
 #ifdef USE_CUDA
   TestFloat16("Add", {3, 1}, lhs_values, {3}, rhs_values, {3, 3}, out_values);
 #endif
 }
-#endif
 
-/** TODO: Add support for broadcasting with SYCL EP **/
-#ifndef USE_SYCL
 TEST(MathOpTest, Add_Broadcast_MultidirectionalBA) {
   OpTester test("Add");
   std::initializer_list<float> lhs_values{1.0f, 2.0f, 3.0f};
@@ -213,14 +205,13 @@ TEST(MathOpTest, Add_Broadcast_MultidirectionalBA) {
             kOpenVINOExecutionProvider});  // OpenVINO: disabled temporarily due to accurarcy issues
 #else
   test.Run(OpTester::ExpectResult::kExpectSuccess, "",
-           {kTensorrtExecutionProvider});  // TensorRT: got C with shape [3, 1]
+           {kTensorrtExecutionProvider, kSyclExecutionProvider});  // TensorRT: got C with shape [3, 1]
 #endif
 
 #ifdef USE_CUDA
   TestFloat16("Add", {3}, lhs_values, {3, 1}, rhs_values, {3, 3}, out_values);
 #endif
 }
-#endif
 
 TEST(MathOpTest, Add_Broadcast_0x0) {
   OpTester test("Add");
@@ -231,8 +222,6 @@ TEST(MathOpTest, Add_Broadcast_0x0) {
   test.Run(OpTester::ExpectResult::kExpectSuccess, "");
 }
 
-/** TODO: Add support for broadcasting with SYCL EP **/
-#ifndef USE_SYCL
 TEST(MathOpTest, Add_Broadcast_0x1) {
   auto run = [](bool scalar_as_initializer) {
     OpTester test("Add");
@@ -243,16 +232,14 @@ TEST(MathOpTest, Add_Broadcast_0x1) {
 #if defined(OPENVINO_CONFIG_MYRIAD)
     test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kOpenVINOExecutionProvider});  // OpenVINO: disabled temporarily on MYRIADX due to a bug
 #else
-    test.Run(OpTester::ExpectResult::kExpectSuccess, "");
+    test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 #endif
   };
 
   run(false);
   run(true);
 }
-#endif
 
-#ifndef USE_SYCL
 TEST(MathOpTest, Add_Broadcast_1x0) {
   auto run = [](bool scalar_as_initializer) {
     OpTester test("Add");
@@ -263,14 +250,13 @@ TEST(MathOpTest, Add_Broadcast_1x0) {
 #if defined(OPENVINO_CONFIG_MYRIAD)
     test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kOpenVINOExecutionProvider});  // OpenVINO: disabled temporarily on MYRIADX due to a bug
 #else
-    test.Run(OpTester::ExpectResult::kExpectSuccess, "");
+    test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 #endif
   };
 
   run(false);
   run(true);
 }
-#endif
 
 TEST(MathOpTest, Add_Broadcast_1x1) {
   OpTester test("Add");
@@ -281,8 +267,6 @@ TEST(MathOpTest, Add_Broadcast_1x1) {
   test.Run(OpTester::ExpectResult::kExpectSuccess, "");
 }
 
-/** TODO: Add support for broadcasting with SYCL EP **/
-#ifndef USE_SYCL
 TEST(MathOpTest, Add_Broadcast_3x2_3x1) {
   OpTester test("Add");
 
@@ -299,12 +283,9 @@ TEST(MathOpTest, Add_Broadcast_3x2_3x1) {
                         {2.0f, 3.0f,
                          5.0f, 6.0f,
                          8.0f, 9.0f});
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "");
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 }
-#endif
 
-/** TODO: Add support for broadcasting with SYCL EP **/
-#ifndef USE_SYCL
 TEST(MathOpTest, Add_Broadcast_2x1x4_1x3x1) {
   OpTester test("Add");
 
@@ -322,12 +303,9 @@ TEST(MathOpTest, Add_Broadcast_2x1x4_1x3x1) {
                          221.0f, 222.0f, 223.0f, 224.0f,
                          231.0f, 232.0f, 233.0f, 234.0f});
 
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider, kSyclExecutionProvider});
 }
-#endif
 
-/** TODO: Add support for broadcasting with SYCL EP **/
-#ifndef USE_SYCL
 TEST(MathOpTest, Add_Broadcast_2x1x1_3x4) {
   OpTester test("Add");
 
@@ -353,9 +331,9 @@ TEST(MathOpTest, Add_Broadcast_2x1x1_3x4) {
   // OpenVINO VPU: Disabled due to software limitation
   excluded_providers.insert(kOpenVINOExecutionProvider);
 #endif
+  excluded_providers.insert(kSyclExecutionProvider);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", excluded_providers);  //TensorRT: Input batch size is inconsistent
 }
-#endif
 
 // Validate runtime failure has useful error message when ORT_ENFORCE is used
 TEST(MathOpTest, Add_Invalid_Broadcast) {

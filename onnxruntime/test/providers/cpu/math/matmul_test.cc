@@ -21,50 +21,40 @@ template <typename T>
 std::vector<MatMulTestData<T>> GenerateTestCases() {
   std::vector<MatMulTestData<T>> test_cases;
 
-#ifndef USE_SYCL
   test_cases.push_back(
       {"test padding and broadcast",
        {3, 1, 1, 2},
        {2, 2, 2},
        {3, 2, 1, 2},
        {2, 3, 6, 7, 6, 11, 26, 31, 10, 19, 46, 55}});
-#endif
 
-#ifndef USE_SYCL
   test_cases.push_back(
       {"test padding and broadcast",
        {2, 3, 2},
        {3, 2, 2, 1},
        {3, 2, 3, 1},
        {1, 3, 5, 33, 43, 53, 5, 23, 41, 85, 111, 137, 9, 43, 77, 137, 179, 221}});
-#endif
 
-#ifndef USE_SYCL
   test_cases.push_back(
       {"test left 1D",
        {2},
        {3, 2, 1},
        {3, 1},
        {1, 3, 5}});
-#endif
 
-#ifndef USE_SYCL
   test_cases.push_back(
       {"test right 1D",
        {3, 1, 2},
        {2},
        {3, 1},
        {1, 3, 5}});
-#endif
 
-#ifndef USE_SYCL
   test_cases.push_back(
       {"test left 1D right 2D",
        {2},
        {2, 3},
        {3},
        {3, 4, 5}});
-#endif
 
   test_cases.push_back(
       {"test scalar output",
@@ -80,14 +70,12 @@ std::vector<MatMulTestData<T>> GenerateTestCases() {
        {3, 3},
        {42, 48, 54, 114, 136, 158, 186, 224, 262}});
 
-#ifndef USE_SYCL
   test_cases.push_back(
       {"test 2D special",
        {2, 2, 3},
        {3, 4},
        {2, 2, 4},
        {20, 23, 26, 29, 56, 68, 80, 92, 92, 113, 134, 155, 128, 158, 188, 218}});
-#endif
 
   test_cases.push_back(
       {"test 2D special 2",
@@ -96,14 +84,12 @@ std::vector<MatMulTestData<T>> GenerateTestCases() {
        {2, 2, 4},
        {20, 23, 26, 29, 56, 68, 80, 92, 92, 113, 134, 155, 128, 158, 188, 218}});
 
-#ifndef USE_SYCL
   test_cases.push_back(
       {"test 2D special 3",
        {2, 6},
        {1, 1, 6, 1},
        {1, 1, 2, 1},
        {55, 145}});
-#endif
 
   test_cases.push_back(
       {"test 2D empty input",
@@ -137,6 +123,10 @@ void RunMatMulTest(int32_t opset_version, bool is_a_constant, bool is_b_constant
     if (is_b_constant) {
       // NNAPI: currently fails for the "test 2D empty input" case
       excluded_providers.insert(kNnapiExecutionProvider);
+    }
+    if (t.input0_dims.size() != t.input1_dims.size()) {
+      // SYCL EP: Doesn't support padding or broadcasting
+      excluded_providers.insert(kSyclExecutionProvider);
     }
     test.Run(OpTester::ExpectResult::kExpectSuccess, "", excluded_providers);
   }

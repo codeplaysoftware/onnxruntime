@@ -45,6 +45,11 @@ void TestBatchNorm(const unordered_map<string, vector<T>>& input_data_map,
   std::unordered_set<std::string> excluded_eps = {kTensorrtExecutionProvider};
   if (spatial_mode == 0) {
     excluded_eps.insert(kOpenVINOExecutionProvider);
+    excluded_eps.insert(kSyclExecutionProvider);
+  }
+  if (sizeof(input_shapes_map.at("X")) > 4) {
+    // Input is 3D
+    excluded_eps.insert(kSyclExecutionProvider);
   }
 
 // OpenVINO: Disabled due to software limitations
@@ -288,7 +293,6 @@ TEST(BatchNormTest, BatchNorm2d_Pytorch) {
   TestBatchNorm(input_data_map, input_shapes_map, epsilon, expected_output, input_shape, true);
 }
 
-#ifndef USE_SYCL
 TEST(BatchNormTest, BatchNorm3d_Pytorch) {
   vector<float> X{2.02384f, -0.935186f, 0.488569f, -0.513934f, -1.27082f, -0.131913f, -1.806f, -0.37904f, 0.667796f,
                   -1.14826f, 1.2522f, 0.0300339f, 2.4758f, 1.55511f, 0.385341f, 1.46645f, -1.09355f, -2.56309f,
@@ -404,7 +408,6 @@ TEST(BatchNormTest, BatchNorm3d_Pytorch) {
   float epsilon = 1e-05f;
   TestBatchNorm(input_data_map, input_shapes_map, epsilon, expected_output, input_shape);
 }
-#endif
 
 TEST(BatchNormTest, InvalidScaleDim) {
   vector<float> X{0.329876f, -0.287158f, -0.411425f, 0.473621f, 0.18156f, -0.170596f, -0.329516f, -0.170733f, -0.121664f, 0.4372f,
@@ -574,7 +577,6 @@ TEST(BatchNormTest, InvalidVarDim) {
                 "Invalid input var");
 }
 
-#ifndef USE_SYCL
 TEST(BatchNormTest, NonSpatial_Simple) {
   vector<float> X{1.f, 2.f, 3.f, 4.f, 1.f, 2.f, 3.f, 4.f};
   vector<float> scale{1.f, 1.f, 1.f, 1.f};
@@ -646,7 +648,6 @@ TEST(BatchNormTest, NonSpatial_Complicated) {
                 "",
                 8);  // opset-8
 }
-#endif
 
 // Only CUDA kernel has float 16 support
 #ifdef USE_CUDA
@@ -741,7 +742,6 @@ TEST(BatchNormTest, BatchNorm2d_fp16) {
 #endif
 
 // TODO fix flaky test for CUDA
-#ifndef USE_SYCL
 #ifdef BATCHNORM_INCLUDE_TRAINING_SUPPORT
 TEST(BatchNormTest, ForwardTrainingTestWithSavedOutputsOpset9) {
   OpTester test("BatchNormalization", 9);
@@ -768,7 +768,7 @@ TEST(BatchNormTest, ForwardTrainingTestWithSavedOutputsOpset9) {
 
   // exclude CUDA Execution Provider due to flakiness
   // exclude TRT and OpenVINO for same reasons as seen in TestBatchNorm()
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider, kSyclExecutionProvider});
 }
 
 TEST(BatchNormTest, ForwardTrainingTestOpset14) {
@@ -794,7 +794,7 @@ TEST(BatchNormTest, ForwardTrainingTestOpset14) {
 
   // exclude CUDA Execution Provider due to flakiness
   // exclude TRT and OpenVINO for same reasons as seen in TestBatchNorm()
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider, kSyclExecutionProvider});
 }
 
 TEST(BatchNormTest, ForwardTrainingTestOpset15) {
@@ -819,10 +819,9 @@ TEST(BatchNormTest, ForwardTrainingTestOpset15) {
   test.AddOutput<float>("running_var", channel_dims, {0.696052f, 1.41316f});
 
   // Same exclusions as the opset 14 test
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider, kSyclExecutionProvider});
 }
 #endif  // BATCHNORM_INCLUDE_TRAINING_SUPPORT
-#endif  // USE_SYCL
 
 }  // namespace test
 }  // namespace onnxruntime
