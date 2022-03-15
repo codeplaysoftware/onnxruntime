@@ -30,28 +30,19 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering Kernels
-#define REGISTER_VERSIONED_REDUCE_KERNELS_TYPED(T, op, start, end) \
-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                         \
-      op,                                                          \
-      kOnnxDomain,                                                 \
-      start,                                                       \
-      end,                                                         \
-      T,                                                           \
-      kSyclExecutionProvider,                                      \
-      KernelDefBuilder()                                           \
-          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()),  \
+#define REGISTER_VERSIONED_REDUCE_KERNELS_TYPED(T, op, start, end)         \
+  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                                 \
+      op, kOnnxDomain, start, end, T, kSyclExecutionProvider,              \
+      KernelDefBuilder().TypeConstraint("T",                               \
+                                        DataTypeImpl::GetTensorType<T>()), \
       op<T>);
 
-#define REGISTER_REDUCE_KERNELS_TYPED(T, op, start)               \
-  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
-      op,                                                         \
-      kOnnxDomain,                                                \
-      start,                                                      \
-      T,                                                          \
-      kSyclExecutionProvider,                                     \
-      KernelDefBuilder()                                          \
-          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
-      op<T>);
+#define REGISTER_REDUCE_KERNELS_TYPED(T, op, start)                         \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(op, kOnnxDomain, start, T,                  \
+                                kSyclExecutionProvider,                     \
+                                KernelDefBuilder().TypeConstraint(          \
+                                    "T", DataTypeImpl::GetTensorType<T>()), \
+                                op<T>);
 
 template <typename T>
 Status ReduceMean<T>::ComputeInternal(OpKernelContext* context) const {
@@ -67,7 +58,7 @@ Status ReduceMean<T>::ComputeInternal(OpKernelContext* context) const {
   }
 
   if (axes_.size() > 0) {
-    //Push the dimensions to be reduced to the far right
+    // Push the dimensions to be reduced to the far right
     for (size_t i = 0; i < axes_.size(); i++) {
       int axis = gsl::narrow_cast<int>(HandleNegativeAxis(axes_[i], x_dims));
       transpose_permutations[x_dims] = transpose_permutations[axis - i];
@@ -78,7 +69,7 @@ Status ReduceMean<T>::ComputeInternal(OpKernelContext* context) const {
   std::vector<int64_t> y_shape;
 
   if (axes_.size() > 0) {
-    //Compute y_shape
+    // Compute y_shape
     for (size_t i = 0, j = 0; i < input_shape.size(); i++) {
       if (i == static_cast<size_t>(axes_[j]) && j < axes_.size()) {
         if (keepdims_) {
@@ -99,17 +90,21 @@ Status ReduceMean<T>::ComputeInternal(OpKernelContext* context) const {
 
   Tensor* Y = context->Output(0, y_shape);
 
-  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
-  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> X_buffer =
+      *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer =
+      *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
   Backend backend{*Queue()};
 
   using DeviceMem = Backend::internal_pointer_type<T>;
 
-  //Creating Device Pointers to Buffers
-  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
-  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
+  // Creating Device Pointers to Buffers
+  auto x_data =
+      DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  auto y_data =
+      DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
   int preserve_dims, reduce_dims;
   preserve_dims = reduce_dims = 1;
@@ -117,7 +112,7 @@ Status ReduceMean<T>::ComputeInternal(OpKernelContext* context) const {
   auto executor = backend.get_executor();
 
   if (axes_.size() > 0) {
-    //Compute preserve_dims and reduce_dims
+    // Compute preserve_dims and reduce_dims
     for (size_t i = 0, j = 0; i < input_shape.size(); i++) {
       if (i == static_cast<size_t>(axes_[j]) && j < axes_.size()) {
         reduce_dims *= input_shape[i];
@@ -126,12 +121,13 @@ Status ReduceMean<T>::ComputeInternal(OpKernelContext* context) const {
         preserve_dims *= input_shape[i];
       }
     }
-    //Allocate transpose memory to re-order input data such that all of the reduction
-    //axes become the inner most dimensions
-    DeviceMem transpose_data = backend.template allocate<T>(X->SizeInBytes() / sizeof(T));
+    // Allocate transpose memory to re-order input data such that all of the
+    // reduction axes become the inner most dimensions
+    DeviceMem transpose_data =
+        backend.template allocate<T>(X->SizeInBytes() / sizeof(T));
 
-    //Make input shape and transpose permutation vectors to be 4D
-    //for correct invocation of SYCL-DNN transpose
+    // Make input shape and transpose permutation vectors to be 4D
+    // for correct invocation of SYCL-DNN transpose
     if (x_dims < 4) {
       for (size_t i = 0; i < 4 - x_dims; i++) {
         input_shape.push_back(1);
@@ -139,12 +135,14 @@ Status ReduceMean<T>::ComputeInternal(OpKernelContext* context) const {
       }
     }
 
-    //Launch the transpose kernel to make all reductions axes inner most dimensions
-    snn::transpose::launch<T, Backend>(x_data, transpose_data, input_shape, transpose_permutations, backend);
+    // Launch the transpose kernel to make all reductions axes inner most
+    // dimensions
+    snn::transpose::launch<T, Backend>(x_data, transpose_data, input_shape,
+                                       transpose_permutations, backend);
 
     blas::extension::_reduction<blas::MeanOperator, T>(
-        executor, transpose_data, reduce_dims, y_data, reduce_dims, preserve_dims,
-        blas::reduction_dim_t::inner);
+        executor, transpose_data, reduce_dims, y_data, reduce_dims,
+        preserve_dims, blas::reduction_dim_t::inner);
 
     backend.template deallocate(transpose_data);
   } else {

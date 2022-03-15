@@ -29,27 +29,16 @@ using Backend = snn::backend::SNNBackend;
 namespace onnxruntime {
 namespace sycl {
 
-#define REGISTER_VERSIONED_TRANSPOSE_KERNEL_TYPED(T, start, end) \
-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                       \
-      Transpose,                                                 \
-      kOnnxDomain,                                               \
-      start,                                                     \
-      end,                                                       \
-      T,                                                         \
-      kSyclExecutionProvider,                                    \
-      KernelDefBuilder()                                         \
-          .TypeConstraint("T", DataTypeImpl::AllTensorTypes()),  \
+#define REGISTER_VERSIONED_TRANSPOSE_KERNEL_TYPED(T, start, end)              \
+  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                                    \
+      Transpose, kOnnxDomain, start, end, T, kSyclExecutionProvider,          \
+      KernelDefBuilder().TypeConstraint("T", DataTypeImpl::AllTensorTypes()), \
       Transpose<T>);
 
-#define REGISTER_TRANSPOSE_KERNEL_TYPED(T, start)               \
-  ONNX_OPERATOR_TYPED_KERNEL_EX(                                \
-      Transpose,                                                \
-      kOnnxDomain,                                              \
-      start,                                                    \
-      T,                                                        \
-      kSyclExecutionProvider,                                   \
-      KernelDefBuilder()                                        \
-          .TypeConstraint("T", DataTypeImpl::AllTensorTypes()), \
+#define REGISTER_TRANSPOSE_KERNEL_TYPED(T, start)                             \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(                                              \
+      Transpose, kOnnxDomain, start, T, kSyclExecutionProvider,               \
+      KernelDefBuilder().TypeConstraint("T", DataTypeImpl::AllTensorTypes()), \
       Transpose<T>);
 
 template <typename OutTy, typename InTy>
@@ -82,7 +71,8 @@ Status Transpose<T>::ComputeInternal(OpKernelContext* ctx) const {
 
   if (!(in_dims.size() >= 1 && in_dims.size() <= 6)) {
     return Status(common::ONNXRUNTIME, common::FAIL,
-                  "Transpose only supported for tensors with number of dimenions > 0 && < 7");
+                  "Transpose only supported for tensors with number of "
+                  "dimenions > 0 && < 7");
   }
 
   if (!X->IsDataType<float>()) {
@@ -96,7 +86,8 @@ Status Transpose<T>::ComputeInternal(OpKernelContext* ctx) const {
   std::vector<int64_t> output_dims(rank);
   std::vector<size_t> default_perm(rank);
   const std::vector<size_t>* p_perm = nullptr;
-  const auto& status = ComputeOutputShape(*X, output_dims, default_perm, p_perm);
+  const auto& status =
+      ComputeOutputShape(*X, output_dims, default_perm, p_perm);
   if (!status.IsOK()) {
     return status;
   }
@@ -105,11 +96,15 @@ Status Transpose<T>::ComputeInternal(OpKernelContext* ctx) const {
   if (Y->Shape().Size() == 0) {
     return Status::OK();
   }
-  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
-  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
+  cl::sycl::buffer<T, 1> Y_buffer =
+      *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
+  auto y_data =
+      DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
-  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  const cl::sycl::buffer<T, 1> X_buffer =
+      *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  auto x_data =
+      DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
 
   snn::transpose::launch<T>(x_data, y_data, NarrowCastVector<int32_t>(in_dims),
                             NarrowCastVector<int32_t>(*p_perm), backend);

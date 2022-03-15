@@ -27,12 +27,16 @@ constexpr const char* kDeviceVendor = "device_vendor";
 }  // namespace provider_option_names
 }  // namespace sycl
 
-SYCLExecutionProviderInfo SYCLExecutionProviderInfo::FromProviderOptions(const ProviderOptions& options) {
+SYCLExecutionProviderInfo SYCLExecutionProviderInfo::FromProviderOptions(
+    const ProviderOptions& options) {
   SYCLExecutionProviderInfo info{};
   ORT_THROW_IF_ERROR(
       ProviderOptionsParser{}
-          .AddAssignmentToReference(sycl::provider_option_names::kDeviceVendor, info.device_vendor)
-          .AddAssignmentToReference(sycl::provider_option_names::kDeviceSelector, info.device_selector)
+          .AddAssignmentToReference(sycl::provider_option_names::kDeviceVendor,
+                                    info.device_vendor)
+          .AddAssignmentToReference(
+              sycl::provider_option_names::kDeviceSelector,
+              info.device_selector)
           .Parse(options));
   // Device id is not part of SYCL Options (since not provided by user)
   // but is set to 0 by default and always in SYCL Info.
@@ -40,7 +44,8 @@ SYCLExecutionProviderInfo SYCLExecutionProviderInfo::FromProviderOptions(const P
   return info;
 }
 
-SYCLExecutionProviderInfo SYCLExecutionProviderInfo::FromProviderOptions(const OrtSYCLProviderOptions& options) {
+SYCLExecutionProviderInfo SYCLExecutionProviderInfo::FromProviderOptions(
+    const OrtSYCLProviderOptions& options) {
   SYCLExecutionProviderInfo info{};
   info.device_selector = options.device_selector;
   info.device_vendor = options.device_vendor;
@@ -48,10 +53,13 @@ SYCLExecutionProviderInfo SYCLExecutionProviderInfo::FromProviderOptions(const O
   return info;
 }
 
-ProviderOptions SYCLExecutionProviderInfo::ToProviderOptions(const SYCLExecutionProviderInfo& info) {
+ProviderOptions SYCLExecutionProviderInfo::ToProviderOptions(
+    const SYCLExecutionProviderInfo& info) {
   const ProviderOptions options{
-      {sycl::provider_option_names::kDeviceSelector, MakeStringWithClassicLocale(info.device_selector)},
-      {sycl::provider_option_names::kDeviceVendor, MakeStringWithClassicLocale(info.device_vendor)},
+      {sycl::provider_option_names::kDeviceSelector,
+       MakeStringWithClassicLocale(info.device_selector)},
+      {sycl::provider_option_names::kDeviceVendor,
+       MakeStringWithClassicLocale(info.device_vendor)},
 
   };
 
