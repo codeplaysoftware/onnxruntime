@@ -29,40 +29,32 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering VERSIONNED TYPED Kernels
-#define REGISTER_VERSIONED_RELU_KERNEL_TYPED(T, start, end)       \
-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
-      Relu,                                                       \
-      kOnnxDomain,                                                \
-      start,                                                      \
-      end,                                                        \
-      T,                                                          \
-      kSyclExecutionProvider,                                     \
-      KernelDefBuilder()                                          \
-          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+#define REGISTER_VERSIONED_RELU_KERNEL_TYPED(T, start, end)                \
+  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                                 \
+      Relu, kOnnxDomain, start, end, T, kSyclExecutionProvider,            \
+      KernelDefBuilder().TypeConstraint("T",                               \
+                                        DataTypeImpl::GetTensorType<T>()), \
       Relu<T>);
 
-#define REGISTER_RELU_KERNEL_TYPED(T, start)                      \
-  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
-      Relu,                                                       \
-      kOnnxDomain,                                                \
-      start,                                                      \
-      T,                                                          \
-      kSyclExecutionProvider,                                     \
-      KernelDefBuilder()                                          \
-          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
-      Relu<T>);
+#define REGISTER_RELU_KERNEL_TYPED(T, start)                                \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(Relu, kOnnxDomain, start, T,                \
+                                kSyclExecutionProvider,                     \
+                                KernelDefBuilder().TypeConstraint(          \
+                                    "T", DataTypeImpl::GetTensorType<T>()), \
+                                Relu<T>);
 
 template <typename T>
 Status Relu<T>::ComputeInternal(OpKernelContext* context) const {
   const Tensor* X = context->Input<Tensor>(0);
   Tensor* Y = context->Output(0, X->Shape());
 
-  if (Y->Shape().Size() == 0)
-    return Status::OK();
+  if (Y->Shape().Size() == 0) return Status::OK();
 
   // SYCL BUFFERS
-  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
-  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> X_buffer =
+      *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer =
+      *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   size_t count = Y->SizeInBytes() / sizeof(T);
 
@@ -72,11 +64,14 @@ Status Relu<T>::ComputeInternal(OpKernelContext* context) const {
   using DeviceMem = Backend::internal_pointer_type<T>;
 
   // Creating Device Pointers to Buffers
-  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
-  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
+  auto x_data =
+      DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  auto y_data =
+      DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
   // Launch Relu kernel
-  snn::pointwise::launch<float, snn::pointwise::Relu, snn::pointwise::Forward>(x_data, y_data, count, backend);
+  snn::pointwise::launch<float, snn::pointwise::Relu, snn::pointwise::Forward>(
+      x_data, y_data, count, backend);
 
   return Status::OK();
 }

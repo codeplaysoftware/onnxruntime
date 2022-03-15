@@ -31,28 +31,19 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering Kernels
-#define REGISTER_VERSIONED_ADD_KERNELS_TYPED(T, op, start, end)   \
-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
-      op,                                                         \
-      kOnnxDomain,                                                \
-      start,                                                      \
-      end,                                                        \
-      T,                                                          \
-      kSyclExecutionProvider,                                     \
-      KernelDefBuilder()                                          \
-          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+#define REGISTER_VERSIONED_ADD_KERNELS_TYPED(T, op, start, end)            \
+  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                                 \
+      op, kOnnxDomain, start, end, T, kSyclExecutionProvider,              \
+      KernelDefBuilder().TypeConstraint("T",                               \
+                                        DataTypeImpl::GetTensorType<T>()), \
       Add<T>);
 
-#define REGISTER_ADD_KERNELS_TYPED(T, op, start)                  \
-  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
-      op,                                                         \
-      kOnnxDomain,                                                \
-      start,                                                      \
-      T,                                                          \
-      kSyclExecutionProvider,                                     \
-      KernelDefBuilder()                                          \
-          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
-      Add<T>);
+#define REGISTER_ADD_KERNELS_TYPED(T, op, start)                            \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(op, kOnnxDomain, start, T,                  \
+                                kSyclExecutionProvider,                     \
+                                KernelDefBuilder().TypeConstraint(          \
+                                    "T", DataTypeImpl::GetTensorType<T>()), \
+                                Add<T>);
 
 template <typename T>
 Status Add<T>::ComputeInternal(OpKernelContext* context) const {
@@ -61,7 +52,9 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
 
   // No support for broadcasting
   if (A->Shape() != B->Shape()) {
-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "Broadcasting not supported with SYCL EP binary elementwise operations");
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+                  "Broadcasting not supported with SYCL EP binary elementwise "
+                  "operations");
   }
 
   Tensor* Y = context->Output(0, A->Shape());
@@ -70,9 +63,12 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
   size_t count2 = B->SizeInBytes() / sizeof(T);
 
   // SYCL BUFFERS
-  const cl::sycl::buffer<T, 1> A_buffer = *A->template Ptr<cl::sycl::buffer<T, 1>>();
-  const cl::sycl::buffer<T, 1> B_buffer = *B->template Ptr<cl::sycl::buffer<T, 1>>();
-  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> A_buffer =
+      *A->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> B_buffer =
+      *B->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer =
+      *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
   Backend backend(*Queue());
@@ -80,15 +76,19 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
   using DeviceMem = Backend::internal_pointer_type<T>;
 
   // Creating Device Pointers to Buffers
-  auto a_data = DeviceMem(A_buffer, static_cast<size_t>(A->ByteOffset() / sizeof(T)));
-  auto b_data = DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
-  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
+  auto a_data =
+      DeviceMem(A_buffer, static_cast<size_t>(A->ByteOffset() / sizeof(T)));
+  auto b_data =
+      DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
+  auto y_data =
+      DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
   snn::binaryop::BinaryParams params;
   params.lhs_items = static_cast<int>(count1);
   params.rhs_items = static_cast<int>(count2);
 
-  snn::binaryop::launch<T, snn::binaryop::Add>(a_data, b_data, y_data, params, backend);
+  snn::binaryop::launch<T, snn::binaryop::Add>(a_data, b_data, y_data, params,
+                                               backend);
 
   return Status::OK();
 }

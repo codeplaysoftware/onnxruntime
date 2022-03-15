@@ -31,28 +31,19 @@ namespace onnxruntime {
 namespace sycl {
 
 // Registering Kernel
-#define REGISTER_VERSIONED_BATCHNORM_KERNEL_TYPED(T, start, end)  \
-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
-      BatchNormalization,                                         \
-      kOnnxDomain,                                                \
-      start,                                                      \
-      end,                                                        \
-      T,                                                          \
-      kSyclExecutionProvider,                                     \
-      KernelDefBuilder()                                          \
-          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+#define REGISTER_VERSIONED_BATCHNORM_KERNEL_TYPED(T, start, end)              \
+  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                                    \
+      BatchNormalization, kOnnxDomain, start, end, T, kSyclExecutionProvider, \
+      KernelDefBuilder().TypeConstraint("T",                                  \
+                                        DataTypeImpl::GetTensorType<T>()),    \
       BatchNorm<T>);
 
-#define REGISTER_BATCHNORM_KERNEL_TYPED(T, start)                 \
-  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
-      BatchNormalization,                                         \
-      kOnnxDomain,                                                \
-      start,                                                      \
-      T,                                                          \
-      kSyclExecutionProvider,                                     \
-      KernelDefBuilder()                                          \
-          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
-      BatchNorm<T>);
+#define REGISTER_BATCHNORM_KERNEL_TYPED(T, start)                           \
+  ONNX_OPERATOR_TYPED_KERNEL_EX(BatchNormalization, kOnnxDomain, start, T,  \
+                                kSyclExecutionProvider,                     \
+                                KernelDefBuilder().TypeConstraint(          \
+                                    "T", DataTypeImpl::GetTensorType<T>()), \
+                                BatchNorm<T>);
 
 template <typename T>
 Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
@@ -65,15 +56,21 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   const TensorShape& x_shape = X->Shape();
   Tensor* Y = context->Output(0, x_shape);
 
-  ORT_RETURN_IF_ERROR(BatchNormHelper::ValidateInputs(X, scale, B, mean, var, spatial_ == 1));
+  ORT_RETURN_IF_ERROR(
+      BatchNormHelper::ValidateInputs(X, scale, B, mean, var, spatial_ == 1));
   // Training mode not supported
   if (is_training_mode_ == 1) {
-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "BatchNormalization Training mode not supported with SYCL EP");
+    return Status(
+        common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+        "BatchNormalization Training mode not supported with SYCL EP");
   } else if (spatial_ != 1) {
-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "BatchNormalization non-spatial input not supported with SYCL EP");
+    return Status(
+        common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+        "BatchNormalization non-spatial input not supported with SYCL EP");
   } else if (x_shape.NumDimensions() > 4 && x_shape.SizeFromDimension(4) != 1) {
     // We don't support 3D input unless the prod(D_3,...,D_N) == 1
-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED, "BatchNormalization 3D input not supported with SYCL EP");
+    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+                  "BatchNormalization 3D input not supported with SYCL EP");
   }
 
   size_t input_dims = x_shape.NumDimensions();
@@ -83,12 +80,18 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   const int64_t W = input_dims > 3 ? x_shape[3] : 1;
 
   // SYCL BUFFERS
-  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
-  const cl::sycl::buffer<T, 1> scale_buffer = *scale->template Ptr<cl::sycl::buffer<T, 1>>();
-  const cl::sycl::buffer<T, 1> B_buffer = *B->template Ptr<cl::sycl::buffer<T, 1>>();
-  const cl::sycl::buffer<T, 1> mean_buffer = *mean->template Ptr<cl::sycl::buffer<T, 1>>();
-  const cl::sycl::buffer<T, 1> var_buffer = *var->template Ptr<cl::sycl::buffer<T, 1>>();
-  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> X_buffer =
+      *X->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> scale_buffer =
+      *scale->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> B_buffer =
+      *B->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> mean_buffer =
+      *mean->template Ptr<cl::sycl::buffer<T, 1>>();
+  const cl::sycl::buffer<T, 1> var_buffer =
+      *var->template Ptr<cl::sycl::buffer<T, 1>>();
+  cl::sycl::buffer<T, 1> Y_buffer =
+      *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
 
   // SYCL DNN Backend
   Backend backend{*Queue()};
@@ -96,21 +99,29 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   using DeviceMem = Backend::internal_pointer_type<T>;
 
   // Creating Device Pointers to Buffers
-  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
-  auto scale_data = DeviceMem(scale_buffer, static_cast<size_t>(scale->ByteOffset() / sizeof(T)));
-  auto b_data = DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
-  auto mean_data = DeviceMem(mean_buffer, static_cast<size_t>(mean->ByteOffset() / sizeof(T)));
-  auto var_data = DeviceMem(var_buffer, static_cast<size_t>(var->ByteOffset() / sizeof(T)));
-  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
+  auto x_data =
+      DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+  auto scale_data = DeviceMem(
+      scale_buffer, static_cast<size_t>(scale->ByteOffset() / sizeof(T)));
+  auto b_data =
+      DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
+  auto mean_data = DeviceMem(
+      mean_buffer, static_cast<size_t>(mean->ByteOffset() / sizeof(T)));
+  auto var_data =
+      DeviceMem(var_buffer, static_cast<size_t>(var->ByteOffset() / sizeof(T)));
+  auto y_data =
+      DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
 
-  // Allocating Intermediate Memory to perform computations in NHWC format through SYCL-DNN
+  // Allocating Intermediate Memory to perform computations in NHWC format
+  // through SYCL-DNN
   DeviceMem input, output;
   input = backend.template allocate<T>(static_cast<size_t>(N * C * H * W));
   output = backend.template allocate<T>(static_cast<size_t>(N * C * H * W));
 
   // Performing input conversion from NCHW to NHWC
   const std::vector<int> input_sizes = {(int)N, (int)C, (int)H, (int)W};
-  snn::transpose::convert_nchw_to_nhwc<T, Backend>(x_data, input, input_sizes, backend);
+  snn::transpose::convert_nchw_to_nhwc<T, Backend>(x_data, input, input_sizes,
+                                                   backend);
 
   // Setting Batchnorm parameters
   snn::batchnorm::BatchNormParams params;
@@ -121,11 +132,13 @@ Status BatchNorm<T>::ComputeInternal(OpKernelContext* context) const {
   params.epsilon = epsilon_;
 
   // Launching Batchnorm kernel
-  snn::batchnorm::launch<T, Backend, snn::batchnorm::Inference>(input, b_data, scale_data, mean_data, var_data, output, params, backend);
+  snn::batchnorm::launch<T, Backend, snn::batchnorm::Inference>(
+      input, b_data, scale_data, mean_data, var_data, output, params, backend);
 
   // Reverting the output back to NCHW layout
   const std::vector<int> output_sizes = {(int)N, (int)H, (int)W, (int)C};
-  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes, backend);
+  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes,
+                                                   backend);
 
   return Status::OK();
 }
@@ -136,5 +149,5 @@ REGISTER_VERSIONED_BATCHNORM_KERNEL_TYPED(float, 9, 13)
 REGISTER_VERSIONED_BATCHNORM_KERNEL_TYPED(float, 14, 14)
 REGISTER_BATCHNORM_KERNEL_TYPED(float, 15)
 
-}  //namespace sycl
+}  // namespace sycl
 }  // namespace onnxruntime

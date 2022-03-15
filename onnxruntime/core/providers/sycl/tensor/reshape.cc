@@ -29,26 +29,18 @@ using Backend = snn::backend::SyclBLASBackend;
 namespace onnxruntime {
 namespace sycl {
 
-#define REGISTER_VERSIONED_RESHAPE_KERNEL_TYPED(start, end)              \
-  ONNX_OPERATOR_VERSIONED_KERNEL_EX(                                     \
-      Reshape,                                                           \
-      kOnnxDomain,                                                       \
-      start,                                                             \
-      end,                                                               \
-      kSyclExecutionProvider,                                            \
-      KernelDefBuilder()                                                 \
-          .TypeConstraint("T", DataTypeImpl::AllFixedSizeTensorTypes()), \
+#define REGISTER_VERSIONED_RESHAPE_KERNEL_TYPED(start, end)     \
+  ONNX_OPERATOR_VERSIONED_KERNEL_EX(                            \
+      Reshape, kOnnxDomain, start, end, kSyclExecutionProvider, \
+      KernelDefBuilder().TypeConstraint(                        \
+          "T", DataTypeImpl::AllFixedSizeTensorTypes()),        \
       Reshape);
 
-#define REGISTER_RESHAPE_KERNEL_TYPED(start)                             \
-  ONNX_OPERATOR_KERNEL_EX(                                               \
-      Reshape,                                                           \
-      kOnnxDomain,                                                       \
-      start,                                                             \
-      kSyclExecutionProvider,                                            \
-      KernelDefBuilder()                                                 \
-          .TypeConstraint("T", DataTypeImpl::AllFixedSizeTensorTypes()), \
-      Reshape);
+#define REGISTER_RESHAPE_KERNEL_TYPED(start)                                   \
+  ONNX_OPERATOR_KERNEL_EX(Reshape, kOnnxDomain, start, kSyclExecutionProvider, \
+                          KernelDefBuilder().TypeConstraint(                   \
+                              "T", DataTypeImpl::AllFixedSizeTensorTypes()),   \
+                          Reshape);
 
 Status Reshape::ComputeInternal(OpKernelContext* context) const {
   // Copy the second input tensor into the shape vector
@@ -58,17 +50,21 @@ Status Reshape::ComputeInternal(OpKernelContext* context) const {
 
   auto nDims = static_cast<size_t>(shapeTensor->Shape()[0]);
   cl::sycl::buffer<int64_t, 1>* shape_buffer =
-      const_cast<cl::sycl::buffer<int64_t, 1>*>(shapeTensor->template Ptr<cl::sycl::buffer<int64_t, 1>>());
+      const_cast<cl::sycl::buffer<int64_t, 1>*>(
+          shapeTensor->template Ptr<cl::sycl::buffer<int64_t, 1>>());
   std::vector<int64_t> shape(nDims);
 
   const Tensor* X = context->Input<Tensor>(0);
 
-  //need to copy the contents of shape_buffer to shape vector
-  //this would help when creating the ReshapeHelper object
-  Queue()->submit([&](cl::sycl::handler& cgh) {
-           auto acc = shape_buffer->template get_access<cl::sycl::access::mode::read>(cgh);
-           cgh.copy(acc, shape.data());
-         })
+  // need to copy the contents of shape_buffer to shape vector
+  // this would help when creating the ReshapeHelper object
+  Queue()
+      ->submit([&](cl::sycl::handler& cgh) {
+        auto acc =
+            shape_buffer->template get_access<cl::sycl::access::mode::read>(
+                cgh);
+        cgh.copy(acc, shape.data());
+      })
       .wait();
 
   ReshapeHelper helper(X->Shape(), shape, allow_zero_);
@@ -76,8 +72,10 @@ Status Reshape::ComputeInternal(OpKernelContext* context) const {
   Tensor* Y = context->Output(0, TensorShape(shape));
 
   // SYCL BUFFERS
-  const cl::sycl::buffer<float, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<float, 1>>();
-  cl::sycl::buffer<float, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<float, 1>>();
+  const cl::sycl::buffer<float, 1> X_buffer =
+      *X->template Ptr<cl::sycl::buffer<float, 1>>();
+  cl::sycl::buffer<float, 1> Y_buffer =
+      *Y->template MutablePtr<cl::sycl::buffer<float, 1>>();
 
   auto count = X->SizeInBytes();
 

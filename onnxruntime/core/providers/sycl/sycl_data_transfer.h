@@ -32,9 +32,11 @@ class SYCLDataTransfer : public IDataTransfer {
   SYCLDataTransfer(std::shared_ptr<cl::sycl::queue> q);
   ~SYCLDataTransfer(){};
 
-  bool CanCopy(const OrtDevice& src_device, const OrtDevice& dst_device) const override;
+  bool CanCopy(const OrtDevice& src_device,
+               const OrtDevice& dst_device) const override;
 
-  common::Status CopyTensor(const Tensor& src, Tensor& dst, int exec_queue_id) const override;
+  common::Status CopyTensor(const Tensor& src, Tensor& dst,
+                            int exec_queue_id) const override;
 
  private:
   std::shared_ptr<cl::sycl::queue> queue_;

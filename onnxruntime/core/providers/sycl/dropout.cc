@@ -22,11 +22,7 @@ namespace sycl {
 
 #define REGISTER_VERSIONED_DROPOUT_KERNEL_TYPED(T, start, end)           \
   ONNX_OPERATOR_VERSIONED_KERNEL_EX(                                     \
-      Dropout,                                                           \
-      kOnnxDomain,                                                       \
-      start,                                                             \
-      end,                                                               \
-      kSyclExecutionProvider,                                            \
+      Dropout, kOnnxDomain, start, end, kSyclExecutionProvider,          \
       KernelDefBuilder()                                                 \
           .TypeConstraint("T", DataTypeImpl::AllIEEEFloatTensorTypes())  \
           .TypeConstraint("T1", DataTypeImpl::AllIEEEFloatTensorTypes()) \
@@ -35,10 +31,7 @@ namespace sycl {
 
 #define REGISTER_DROPOUT_KERNEL_TYPED(T, start)                          \
   ONNX_OPERATOR_KERNEL_EX(                                               \
-      Dropout,                                                           \
-      kOnnxDomain,                                                       \
-      start,                                                             \
-      kSyclExecutionProvider,                                            \
+      Dropout, kOnnxDomain, start, kSyclExecutionProvider,               \
       KernelDefBuilder()                                                 \
           .TypeConstraint("T", DataTypeImpl::AllIEEEFloatTensorTypes())  \
           .TypeConstraint("T1", DataTypeImpl::AllIEEEFloatTensorTypes()) \
@@ -46,36 +39,38 @@ namespace sycl {
       Dropout);
 
 Status Dropout::ComputeInternal(OpKernelContext* context) const {
-  //Get X_data
+  // Get X_data
   const Tensor* X = context->Input<Tensor>(0);
 
   if (X == nullptr)
-    return Status(common::ONNXRUNTIME, common::FAIL, "X Input is not available.");
+    return Status(common::ONNXRUNTIME, common::FAIL,
+                  "X Input is not available.");
 
   const TensorShape& x_shape = X->Shape();
   const int64_t N = x_shape.Size();
 
-  //Get Y_data
+  // Get Y_data
   auto Y = context->Output(0, x_shape);
 
-  //Get mask_data
+  // Get mask_data
   auto mask = context->Output(1, x_shape);
 
   ORT_ENFORCE(Y != nullptr);
 
   ORT_ENFORCE(!mask || mask->Shape().Size() == N);
 
-  //Get the ratio_data
+  // Get the ratio_data
   float ratio_data = default_ratio_;
   auto ratio = context->Input<Tensor>(1);
 
   const Tensor* training_mode = context->Input<Tensor>(2);
-  //Check for inference mode.
-  if ((0 == ratio_data) || (training_mode == nullptr || *(training_mode->Ptr<bool>()) == false)) {
+  // Check for inference mode.
+  if ((0 == ratio_data) ||
+      (training_mode == nullptr || *(training_mode->Ptr<bool>()) == false)) {
     const void* source = X->DataRaw();
     void* target = Y->MutableDataRaw();
 
-    //Copy input data to output if required
+    // Copy input data to output if required
     if (target != source) {
       auto data_transfer = this->GetDataTransfer();
       ORT_THROW_IF_ERROR(data_transfer->CopyTensor(*X, *Y));
@@ -92,7 +87,9 @@ Status Dropout::ComputeInternal(OpKernelContext* context) const {
     t_disp.Invoke<GetRatioDataImpl>(ratio, ratio_data);
     return Status::OK();
   } else {
-    return Status(onnxruntime::common::ONNXRUNTIME, onnxruntime::common::NOT_IMPLEMENTED, "Dropout not implemented for training");
+    return Status(onnxruntime::common::ONNXRUNTIME,
+                  onnxruntime::common::NOT_IMPLEMENTED,
+                  "Dropout not implemented for training");
   }
 }
 
