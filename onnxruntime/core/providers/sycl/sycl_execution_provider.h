@@ -15,6 +15,7 @@
  */
 
 #pragma once
+
 #include <algorithm>
 
 #include "core/framework/execution_provider.h"

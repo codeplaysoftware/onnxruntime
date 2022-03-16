@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "core/common/common.h"
 #include "core/providers/sycl/sycl_kernel.h"
 #include "core/framework/data_types_internal.h"
