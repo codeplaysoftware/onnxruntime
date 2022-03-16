@@ -15,6 +15,7 @@
  */
 
 #pragma once
+
 #include "core/common/logging/logging.h"
 #include "core/providers/sycl/sycl_execution_provider_info.h"
 
