@@ -1,0 +1,117 @@
+FROM nvcr.io/nvidia/cuda:11.4.1-cudnn8-devel-ubuntu18.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies
+ENV CMAKE_URL=https://github.com/Kitware/CMake/releases/download/v3.21.4/cmake-3.21.4-linux-x86_64.tar.gz
+RUN DEBIAN_FRONTEND=noninteractive apt -yq update && apt install -yq --no-install-recommends \
+    ca-certificates \
+    libtinfo5 \
+    wget \
+    g++ \
+    gcc \
+    git \
+    cpio \
+    ninja-build \
+    python3 \
+    libpython3.6-dev \
+    python3-pip \
+    python3-dev \
+    python3-setuptools \
+    python3-wheel \
+    clinfo \
+    libboost-all-dev \
+    software-properties-common \
+    ocl-icd-opencl-dev \
+    ocl-icd-dev \
+    opencl-headers && \
+    wget --no-verbose ${CMAKE_URL} -O /tmp/cmake.tar.gz && \
+    tar -zxf /tmp/cmake.tar.gz --strip=1 -C /usr --wildcards cmake*/bin/cmake cmake*/bin/ctest cmake*/share/cmake*/Modules cmake*/share/cmake*/Templates && \
+    apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    pip3 install flatbuffers numpy
+
+# These CL headers interfere with SYCL...
+RUN rm -rf /usr/local/cuda/include/CL
+
+# Set environment variables
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64/:${LD_LIBRARY_PATH}
+ENV PATH /usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
+
+ENV CXX=g++
+ENV CC=gcc 
+
+ENV DPCPP_URL="https://github.com/intel/llvm"
+ENV DPCPP_TAG="sycl-nightly/20220210"
+ENV DPCPP_PATH="/tmp/dpcpp/"
+
+# Get and build DPCPP 
+
+RUN git clone -b ${DPCPP_TAG} ${DPCPP_URL} ${DPCPP_PATH}
+RUN cd ${DPCPP_PATH} && CUDA_LIB_PATH=/usr/local/cuda/lib64/stubs python3 buildbot/configure.py --cuda && \
+    python3 buildbot/compile.py 
+
+ENV DPCPP_INSTALL_PATH=${DPCPP_PATH}/build/install
+
+# Set ENV Variables for building with DPC++
+ENV LD_LIBRARY_PATH=${DPCPP_INSTALL_PATH}/lib:${LD_LIBRARY_PATH}
+ENV PATH=${DPCPP_INSTALL_PATH}/bin:${PATH}
+
+ENV CXX=${DPCPP_INSTALL_PATH}/bin/clang++
+ENV CC=${DPCPP_INSTALL_PATH}/bin/clang
+
+# Note previously had $CUDA_ROOT/lib64/stubs in LD_LIBRARY_PATH but this is verboten!
+# Rather hacky fix is to symlink libcuda.so.1 from the right place...
+RUN ln -s /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/local/cuda/lib64/stubs/libcuda.so.1
+RUN ln -s /usr/local/cuda/lib64/stubs/libnvidia-ml.so /usr/local/cuda/lib64/stubs/libnvidia-ml.so.1
+
+# Build SYCL-BLAS
+ARG SYCLBLAS_COMMIT="927113928e8bfa509bc42935a29ae767239d31fe"
+ARG SYCLBLAS_URL="https://github.com/codeplaysoftware/sycl-blas.git"
+ENV SYCL_BLAS_ROOT=/tmp/sycl-blas
+RUN git clone --recursive ${SYCLBLAS_URL} ${SYCL_BLAS_ROOT} && \
+    cd ${SYCL_BLAS_ROOT} && \
+    if [ ! -z "${SYCLBLAS_COMMIT}" ]; then git checkout ${SYCLBLAS_COMMIT} && git show -s --format='%h %s'; fi && \
+    mkdir -p build && cd build && \
+    cmake ../ -GNinja -DSYCL_COMPILER=dpcpp \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DTARGET=NVIDIA_GPU \
+        -DSYCL_COMPILER=computecpp \
+        -DBLAS_ENABLE_CONST_INPUT=ON \
+        -DBLAS_ENABLE_TESTING=OFF \
+        -DBLAS_ENABLE_BENCHMARK=OFF \
+        -Wno-dev && \
+    cmake --build .
+
+# Build SYCL-DNN
+ARG SYCLDNN_BRANCH="dpcpp_master"
+ARG SYCLDNN_URL="https://git.office.codeplay.com/muhammad.tanvir/sycl-dnn.git"
+ENV SYCL_DNN_ROOT=/tmp/sycl-dnn
+RUN git clone --recursive -b SYCLDNN_BRANCH ${SYCLDNN_URL} ${SYCL_DNN_ROOT} && \
+    cd ${SYCL_DNN_ROOT} && \
+    mkdir -p build && cd build && \
+    cmake ../ -GNinja  \
+        -DCMAKE_INSTALL_PREFIX=${SYCL_DNN_ROOT}/build/install \
+        -DCMAKE_EXE_LINKER_FLAGS="-Wl,--enable-new-dtags -lstdc++ \
+        -fsycl -ldl" -DCMAKE_CXX_FLAGS="-DTARGET=NVIDIA_GPU" -DSNN_DPCPP=ON -DCMAKE_BUILD_TYPE="Release" \
+        -DSNN_DOWNLOAD_SYCLBLAS=OFF -DSNN_BUILD_DOCUMENTATION=OFF -DSNN_BUILD_TESTS=OFF \
+        -DSNN_BUILD_BENCHMARKS=OFF -DSNN_BUILD_SAMPLES=ON -DSNN_BENCH_EIGEN=OFF -DSNN_DOWNLOAD_EIGEN=OFF \
+        -DSNN_INSTALL_TESTS=OFF -DSNN_INSTALL_BENCHMARKS=OFF -DSNN_BENCH_CLBLAST=OFF -DSNN_BENCH_SNN=OFF -DSNN_BUILD_INTERNAL_BENCHMARKS=OFF -DSNN_TEST_EIGEN=OFF -DSNN_TEST_SYCLBLAS=ON \
+        -DSNN_TEST_SYCLBLAS_MATMULS=OFF -DSNN_TEST_EIGEN_MATMULS=OFF-DBUILD_SHARED_LIBS=OFF \
+        -DSyclBLAS_DIR="${SYCL_BLAS_ROOT}" -Dsycl_blas_DIR="${SYCL_BLAS_ROOT}/build" \
+        -Dsycl_blas_LIBRARY="${SYCL_BLAS_ROOT}/build/libsycl_blas.so" \
+        -Dsycl_blas_INCLUDE_DIR="${SYCL_BLAS_ROOT}/include" \
+        -Dsycl_blas_SRC_DIR="${SYCL_BLAS_ROOT}/src" \
+        -Wno-dev && \
+    cmake --build . && cmake --install .
+
+ARG BUILD_TYPE="Release"
+ADD . /source
+RUN cd /source && \
+    CC=gcc CXX=g++  ./build.sh \
+    --use_sycl --build_shared_lib \
+    --syclblas_home=${SYCL_BLAS_ROOT} \
+    --sycldnn_home=${SYCL_DNN_ROOT}/build/install \
+    --config ${BUILD_TYPE} --cmake_generator=Ninja \
+    --parallel --skip_tests --build \
+    --update --skip_submodule_sync --build_wheel \
+    --cmake_extra_defines SYCLDNN_DIR=${SYCL_DNN_ROOT}/build/install/lib/sycldnn/cmake
