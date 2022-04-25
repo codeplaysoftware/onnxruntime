@@ -83,10 +83,10 @@ RUN git clone --recursive ${SYCLBLAS_URL} ${SYCL_BLAS_ROOT} && \
     cmake --build .
 
 # Build SYCL-DNN
-ARG SYCLDNN_BRANCH="dpcpp_master"
-ARG SYCLDNN_URL="https://git.office.codeplay.com/muhammad.tanvir/sycl-dnn.git"
+ARG SYCLDNN_BRANCH="experimental"
+ARG SYCLDNN_URL="https://github.com/codeplaysoftware/SYCL-DNN.git"
 ENV SYCL_DNN_ROOT=/tmp/sycl-dnn
-RUN git clone --recursive -b SYCLDNN_BRANCH ${SYCLDNN_URL} ${SYCL_DNN_ROOT} && \
+RUN git clone --recursive -b ${SYCLDNN_BRANCH} ${SYCLDNN_URL} ${SYCL_DNN_ROOT} && \
     cd ${SYCL_DNN_ROOT} && \
     mkdir -p build && cd build && \
     cmake ../ -GNinja  \
