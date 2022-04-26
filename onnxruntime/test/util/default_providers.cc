@@ -8,6 +8,9 @@
 #ifdef USE_COREML
 #include "core/providers/coreml/coreml_provider_factory.h"
 #endif
+#ifdef USE_SYCL
+#include "core/providers/sycl/sycl_provider_factory_creator.h"
+#endif
 #include "core/session/onnxruntime_cxx_api.h"
 
 namespace onnxruntime {
@@ -176,6 +179,14 @@ std::unique_ptr<IExecutionProvider> DefaultCoreMLExecutionProvider() {
   uint32_t coreml_flags = 0;
   coreml_flags |= COREML_FLAG_USE_CPU_ONLY;
   return CreateExecutionProviderFactory_CoreML(coreml_flags)->CreateProvider();
+#else
+  return nullptr;
+#endif
+}
+
+std::unique_ptr<IExecutionProvider> DefaultSyclExecutionProvider() {
+#ifdef USE_SYCL
+  return CreateExecutionProviderFactory_SYCL(SYCLExecutionProviderInfo{})->CreateProvider();
 #else
   return nullptr;
 #endif

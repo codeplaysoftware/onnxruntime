@@ -32,7 +32,7 @@ Tensor::Tensor(MLDataType p_type, const TensorShape& shape, std::shared_ptr<IAll
     if (!IAllocator::CalcMemSizeForArray(SafeInt<size_t>(shape_size), p_type->Size(), &len))
       ORT_THROW("tensor failed memory size calculation");
 
-    p_data = allocator->Alloc(len);
+    p_data = allocator->TypeAlloc(len, p_type->AsPrimitiveDataType()->GetDataType());
   }
 
   Init(p_type, shape, p_data, allocator);
@@ -53,9 +53,9 @@ void Tensor::InitOrtValue(MLDataType elt_type, const TensorShape& shape,
 }
 
 void Tensor::InitOrtValue(MLDataType p_type, const TensorShape& shape, void* p_data,
-                          const OrtMemoryInfo& location, OrtValue& ort_value) {
+                          const OrtMemoryInfo& location, OrtValue& ort_value, ptrdiff_t offset) {
   auto ml_tensor = DataTypeImpl::GetType<Tensor>();
-  auto p_tensor = std::make_unique<Tensor>(p_type, shape, p_data, location);
+  auto p_tensor = std::make_unique<Tensor>(p_type, shape, p_data, location, offset);
   ort_value.Init(p_tensor.release(), ml_tensor, ml_tensor->GetDeleteFunc());
 }
 

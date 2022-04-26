@@ -52,6 +52,7 @@ option(onnxruntime_USE_COREML "Build with CoreML support" OFF)
 option(onnxruntime_USE_NNAPI_BUILTIN "Build with builtin NNAPI lib for Android NNAPI support" OFF)
 option(onnxruntime_USE_RKNPU "Build with RKNPU support" OFF)
 option(onnxruntime_USE_DNNL "Build with DNNL support" OFF)
+option(onnxruntime_USE_SYCL "Build with SYCL/ComputeCpp support" OFF)
 option(onnxruntime_DEV_MODE "Enable developer warnings and treat most of them as error." OFF)
 option(onnxruntime_BUILD_UNIT_TESTS "Build ONNXRuntime unit tests" ON)
 option(onnxruntime_BUILD_CSHARP "Build C# library" OFF)
@@ -534,6 +535,7 @@ if (MSVC)
   endif()
 
 
+
   #Always enable exception handling, even for Windows ARM
   if (NOT onnxruntime_DISABLE_EXCEPTIONS)
     string(APPEND CMAKE_CXX_FLAGS " /EHsc")
@@ -805,6 +807,13 @@ if (onnxruntime_USE_CUDA AND "${onnxruntime_CUDNN_HOME}" STREQUAL "")
   message(FATAL_ERROR "onnxruntime_CUDNN_HOME required for onnxruntime_USE_CUDA")
 endif()
 
+if (onnxruntime_USE_SYCL AND "${onnxruntime_SYCLBLAS_HOME}" STREQUAL "")
+  message(FATAL_ERROR "onnxruntime_SYCLBLAS_HOME required for onnxruntime_USE_SYCL")
+endif()
+
+if (onnxruntime_USE_SYCL AND "${onnxruntime_SYCLDNN_HOME}" STREQUAL "")
+  message(FATAL_ERROR "onnxruntime_SYCLDNN_HOME required for onnxruntime_USE_SYCL")
+endif()
 
 get_filename_component(ONNXRUNTIME_ROOT "${ONNXRUNTIME_ROOT}" ABSOLUTE)
 get_filename_component(ORTTRAINING_ROOT "${ORTTRAINING_ROOT}" ABSOLUTE)
@@ -1126,6 +1135,13 @@ if (onnxruntime_USE_COREML)
     list(APPEND ORT_PROVIDER_CMAKE_FLAGS -Donnxruntime_USE_COREML=1)
     list(APPEND ONNXRUNTIME_PROVIDER_NAMES coreml)
 endif()
+if(onnxruntime_USE_SYCL)
+    include(SYCL)
+    list(APPEND ORT_PROVIDER_FLAGS -DUSE_SYCL=1)
+    list(APPEND ORT_PROVIDER_CMAKE_FLAGS -Donnxruntime_USE_SYCL=1)
+    list(APPEND ONNXRUNTIME_PROVIDER_NAMES sycl)
+endif()
+
 function(onnxruntime_set_compile_flags target_name)
     target_compile_definitions(${target_name} PUBLIC EIGEN_USE_THREADS)
     if (MSVC)

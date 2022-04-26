@@ -43,9 +43,9 @@ void TestReduceOp(const std::string& op,
   test.AddInput<float>("data", input_dims, data);
   test.AddOutput<OutT>("reduced", expected_dims, expected_data);
 #if defined(OPENVINO_CONFIG_GPU_FP32)
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kOpenVINOExecutionProvider, kTensorrtExecutionProvider});  //TensorRT,OpenVINO: result differs
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kOpenVINOExecutionProvider, kTensorrtExecutionProvider, kSyclExecutionProvider});  //TensorRT,OpenVINO: result differs
 #else
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider});  //TensorRT: result differs
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kSyclExecutionProvider});  //TensorRT: result differs
 #endif
 }
 
@@ -884,7 +884,7 @@ TEST(ReductionOpTest, ReduceMean_default_axes_keepdims_double) {
                          55.0, 1.0,
                          60.0, 2.0});
   test.AddOutput<double>("reduced", {1, 1, 1}, {18.25});
-  test.Run();
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 }
 
 TEST(ReductionOpTest, ReduceMean_default_axes_do_not_keep_dims) {
@@ -916,7 +916,7 @@ TEST(ReductionOpTest, ReduceMean_default_axes_do_not_keep_dims_double) {
                          55.0, 1.0,
                          60.0, 2.0});
   test.AddOutput<double>("reduced", {}, {18.25});
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});  //TensorRT: full reduce without keepDimensions is not supported with explicit batch
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider, kSyclExecutionProvider});  //TensorRT: full reduce without keepDimensions is not supported with explicit batch
 }
 
 TEST(ReductionOpTest, ReduceMean_do_not_keepdims) {
@@ -965,7 +965,7 @@ TEST(ReductionOpTest, ReduceMean_do_not_keepdims_double) {
   test.SetOutputRelErr("reduced", 1e-5f);
 #endif
 
-  test.Run();
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 }
 
 TEST(ReductionOpTest, ReduceMean_do_not_keepdims_2) {
@@ -985,7 +985,7 @@ TEST(ReductionOpTest, ReduceMean_do_not_keepdims_2_double) {
   test.AddInput<double>("data", {3},
                         {1.0, 2.0, 3.0});
   test.AddOutput<double>("reduced", {}, {2.0});
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});  //TensorRT: full reduce without keepDimensions is not supported with explicit batch
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider, kSyclExecutionProvider});  //TensorRT: full reduce without keepDimensions is not supported with explicit batch
 }
 
 TEST(ReductionOpTest, ReduceMean_keepdims) {
@@ -1033,7 +1033,7 @@ TEST(ReductionOpTest, ReduceMean_keepdims_double) {
   //  output[i] evaluates to 34.999866485595703
   test.SetOutputRelErr("reduced", 1e-5f);
 #endif
-  test.Run();
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 }
 
 TEST(ReductionOpTest, ReduceMean) {
@@ -1050,7 +1050,7 @@ TEST(ReductionOpTest, ReduceMean) {
                         9.0f, 10.0f,
                         11.0f, 12.0f});
   test.AddOutput<float>("reduced", {1, 2, 1}, {5.5f, 7.5f});
-
+  
   test.Run();
 }
 
@@ -1069,7 +1069,7 @@ TEST(ReductionOpTest, ReduceMean_double) {
                          11.0, 12.0});
   test.AddOutput<double>("reduced", {1, 2, 1}, {5.5, 7.5});
 
-  test.Run();
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 }
 
 TEST(ReductionOpTest, ReduceMean_int32) {
@@ -1086,7 +1086,7 @@ TEST(ReductionOpTest, ReduceMean_int32) {
                           90, 100,
                           110, 120});
   test.AddOutput<int32_t>("reduced", {1, 2, 1}, {55, 75});
-  test.Run();
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 }
 
 #if !(defined USE_TVM)
@@ -1094,14 +1094,14 @@ TEST(ReductionOpTest, ReduceMean0DTensor) {
   OpTester test("ReduceMean");
   test.AddInput<float>("data", {}, {2});
   test.AddOutput<float>("reduced", {}, {2});
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider, kSyclExecutionProvider});
 }
 
 TEST(ReductionOpTest, ReduceMean0DTensor_double) {
   OpTester test("ReduceMean");
   test.AddInput<double>("data", {}, {2});
   test.AddOutput<double>("reduced", {}, {2});
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider, kSyclExecutionProvider});
 }
 #endif  // !(defined USE_TVM)
 

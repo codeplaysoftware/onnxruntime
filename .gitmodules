@@ -9,7 +9,8 @@
 	url = https://github.com/google/benchmark.git
 [submodule "cmake/external/onnx"]
 	path = cmake/external/onnx
-	url = https://github.com/onnx/onnx.git
+	url = https://github.com/codeplaysoftware/onnx.git
+	branch = sycl_nhwc
 [submodule "cmake/external/tvm"]
 	path = cmake/external/tvm
 	url = https://github.com/microsoft/onnxruntime-tvm.git

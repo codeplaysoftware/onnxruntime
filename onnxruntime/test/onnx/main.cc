@@ -36,7 +36,7 @@ void usage() {
       "\t-v: verbose\n"
       "\t-n [test_case_name]: Specifies a single test case to run.\n"
       "\t-e [EXECUTION_PROVIDER]: EXECUTION_PROVIDER could be 'cpu', 'cuda', 'dnnl', 'tensorrt', "
-      "'openvino', 'nuphar', 'rocm', 'migraphx', 'acl', 'armnn', 'nnapi' or 'coreml'. "
+      "'openvino', 'nuphar', 'rocm', 'migraphx', 'acl', 'armnn', 'nnapi', 'coreml', or 'sycl'. "
       "Default: 'cpu'.\n"
       "\t-p: Pause after launch, can attach debugger and continue\n"
       "\t-x: Use parallel executor, default (without -x): sequential executor.\n"
@@ -104,6 +104,7 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
   bool enable_armnn = false;
   bool enable_rocm = false;
   bool enable_migraphx = false;
+  bool enable_sycl = false;
   int device_id = 0;
   GraphOptimizationLevel graph_optimization_level = ORT_ENABLE_ALL;
   bool user_graph_optimization_level_set = false;
@@ -179,6 +180,8 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
             enable_rocm = true;
           } else if (!CompareCString(optarg, ORT_TSTR("migraphx"))) {
             enable_migraphx = true;
+          } else if (!CompareCString(optarg, ORT_TSTR("sycl"))) {
+            enable_sycl = true;
           } else {
             usage();
             return -1;
@@ -419,6 +422,19 @@ int real_main(int argc, char* argv[], Ort::Env& env) {
       Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_MIGraphX(sf, device_id));
 #else
       fprintf(stderr, "MIGRAPHX is not supported in this build");
+      return -1;
+#endif
+    }
+    if (enable_sycl) {
+#ifdef USE_SYCL
+      p_models = 1;  // Nb of cores to use
+      OrtSYCLProviderOptions syclOptions;
+      syclOptions.device_selector = "";  // Specific device types can be passed ("GPU", "CPU", "ACC", etc..)
+      syclOptions.device_vendor = "";    // Specific vendor names can be passed for target device
+      sf.SetGraphOptimizationLevel(ORT_DISABLE_ALL);
+      sf.AppendExecutionProvider_SYCL(syclOptions);
+#else
+      fprintf(stderr, "SYCL is not supported in this build");
       return -1;
 #endif
     }

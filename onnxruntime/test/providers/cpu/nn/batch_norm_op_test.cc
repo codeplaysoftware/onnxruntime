@@ -45,6 +45,11 @@ void TestBatchNorm(const unordered_map<string, vector<T>>& input_data_map,
   std::unordered_set<std::string> excluded_eps = {kTensorrtExecutionProvider};
   if (spatial_mode == 0) {
     excluded_eps.insert(kOpenVINOExecutionProvider);
+    excluded_eps.insert(kSyclExecutionProvider);
+  }
+  if (sizeof(input_shapes_map.at("X")) > 4) {
+    // Input is 3D
+    excluded_eps.insert(kSyclExecutionProvider);
   }
 
 // OpenVINO: Disabled due to software limitations
@@ -763,7 +768,7 @@ TEST(BatchNormTest, ForwardTrainingTestWithSavedOutputsOpset9) {
 
   // exclude CUDA Execution Provider due to flakiness
   // exclude TRT and OpenVINO for same reasons as seen in TestBatchNorm()
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider, kSyclExecutionProvider});
 }
 
 TEST(BatchNormTest, ForwardTrainingTestOpset14) {
@@ -789,7 +794,7 @@ TEST(BatchNormTest, ForwardTrainingTestOpset14) {
 
   // exclude CUDA Execution Provider due to flakiness
   // exclude TRT and OpenVINO for same reasons as seen in TestBatchNorm()
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider, kSyclExecutionProvider});
 }
 
 TEST(BatchNormTest, ForwardTrainingTestOpset15) {
@@ -814,7 +819,7 @@ TEST(BatchNormTest, ForwardTrainingTestOpset15) {
   test.AddOutput<float>("running_var", channel_dims, {0.696052f, 1.41316f});
 
   // Same exclusions as the opset 14 test
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kCudaExecutionProvider, kTensorrtExecutionProvider, kOpenVINOExecutionProvider, kDnnlExecutionProvider, kSyclExecutionProvider});
 }
 #endif  // BATCHNORM_INCLUDE_TRAINING_SUPPORT
 

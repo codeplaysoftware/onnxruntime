@@ -224,6 +224,18 @@ def parse_arguments():
     parser.add_argument(
         "--enable_cuda_line_info", action='store_true', help="Enable CUDA line info.")
 
+    # SYCL Related
+    parser.add_argument(
+        "--use_sycl", action='store_true',
+        help="Build with SYCL Support")
+    parser.add_argument(
+        "--use_sycl_nhwc", action='store_true',
+        help="Build with SYCL and NHWC Support")
+    parser.add_argument(
+        "--syclblas_home", help="Path to SYCLBLAS installation/source dir")
+    parser.add_argument(
+        "--sycldnn_home", help="Path to SYCLDNN installation/source dir")
+
     # Python bindings
     parser.add_argument(
         "--enable_pybind", action='store_true', help="Enable Python Bindings.")
@@ -728,7 +740,8 @@ def add_cmake_define_without_override(cmake_extra_defines, key, value):
 
 
 def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home, rocm_home,
-                        mpi_home, nccl_home, tensorrt_home, migraphx_home, acl_home, acl_libs, armnn_home, armnn_libs,
+                        mpi_home, nccl_home, tensorrt_home, migraphx_home, acl_home, acl_libs,
+                        armnn_home, armnn_libs, syclblas_home, sycldnn_home,
                         path_to_protoc_exe, configs, cmake_extra_defines, args, cmake_extra_args):
     log.info("Generating CMake build tree")
     cmake_dir = os.path.join(source_dir, "cmake")
@@ -838,6 +851,9 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
                                                               else "OFF"),
         "-Donnxruntime_NVCC_THREADS=" + str(args.parallel),
         "-Donnxruntime_ENABLE_CUDA_PROFILING=" + ("ON" if args.enable_cuda_profiling else "OFF"),
+        # SYCL EP Related
+        "-Donnxruntime_USE_SYCL=" + ("ON" if args.use_sycl or args.use_sycl_nhwc else "OFF"),
+        "-Donnxruntime_USE_SYCL_NHWC=" + ("ON" if args.use_sycl_nhwc else "OFF"),
     ]
     if args.external_graph_transformer_path:
         cmake_args.append("-Donnxruntime_EXTERNAL_TRANSFORMER_SRC_PATH=" + args.external_graph_transformer_path)
@@ -945,6 +961,12 @@ def generate_build_tree(cmake_path, source_dir, build_dir, cuda_home, cudnn_home
 
     if args.nnapi_min_api:
         cmake_args += ["-Donnxruntime_NNAPI_MIN_API=" + str(args.nnapi_min_api)]
+
+    if syclblas_home and os.path.exists(syclblas_home):
+        cmake_args += ["-Donnxruntime_SYCLBLAS_HOME=" + syclblas_home]
+
+    if sycldnn_home and os.path.exists(sycldnn_home):
+        cmake_args += ["-Donnxruntime_SYCLDNN_HOME=" + sycldnn_home]
 
     if args.android:
         if not args.android_ndk_path:
@@ -1715,7 +1737,7 @@ def run_nodejs_tests(nodejs_binding_dir):
 def build_python_wheel(
         source_dir, build_dir, configs, use_cuda, cuda_version, use_rocm, rocm_version, use_dnnl,
         use_tensorrt, use_openvino, use_nuphar, use_stvm, use_vitisai, use_acl, use_armnn, use_dml,
-        wheel_name_suffix, enable_training, nightly_build=False, default_training_package_device=False,
+        use_sycl, wheel_name_suffix, enable_training, nightly_build=False, default_training_package_device=False,
         use_ninja=False, build_eager_mode=False):
     for config in configs:
         cwd = get_config_build_dir(build_dir, config)
@@ -1763,6 +1785,8 @@ def build_python_wheel(
             args.append('--use_armnn')
         elif use_dml:
             args.append('--wheel_name_suffix=directml')
+        elif use_sycl:
+            args.append('--use_sycl')
 
         run_subprocess(args, cwd=cwd)
 
@@ -2121,6 +2145,10 @@ def main():
     # if using rocm, setup rocm paths
     rocm_home = setup_rocm_build(args, configs)
 
+    # if using sycl, setup syclblas & sycldnn paths
+    syclblas_home = args.syclblas_home
+    sycldnn_home = args.sycldnn_home
+
     if args.update or args.build:
         for config in configs:
             os.makedirs(get_config_build_dir(build_dir, config), exist_ok=True)
@@ -2300,7 +2328,8 @@ def main():
         generate_build_tree(
             cmake_path, source_dir, build_dir, cuda_home, cudnn_home, rocm_home, mpi_home, nccl_home,
             tensorrt_home, migraphx_home, acl_home, acl_libs, armnn_home, armnn_libs,
-            path_to_protoc_exe, configs, cmake_extra_defines, args, cmake_extra_args)
+            syclblas_home, sycldnn_home, path_to_protoc_exe, configs, cmake_extra_defines, args,
+            cmake_extra_args)
 
     if args.clean:
         clean_targets(cmake_path, build_dir, configs)
@@ -2350,6 +2379,7 @@ def main():
                 args.use_acl,
                 args.use_armnn,
                 args.use_dml,
+                args.use_sycl,
                 args.wheel_name_suffix,
                 args.enable_training,
                 nightly_build=nightly_build,

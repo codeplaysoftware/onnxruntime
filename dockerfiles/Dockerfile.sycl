@@ -1,0 +1,107 @@
+FROM ubuntu:18.04
+
+# Install dependencies
+ENV CMAKE_URL=https://github.com/Kitware/CMake/releases/download/v3.21.4/cmake-3.21.4-linux-x86_64.tar.gz
+RUN DEBIAN_FRONTEND=noninteractive apt -yq update && apt install -yq --no-install-recommends \
+    ca-certificates \
+    libtinfo5 \
+    wget \
+    g++ \
+    gcc \
+    git \
+    cpio \
+    ninja-build \
+    python3 \
+    libpython3.6-dev \
+    python3-pip \
+    python3-dev \
+    python3-setuptools \
+    python3-wheel \
+    clinfo \
+    libboost-all-dev \
+    software-properties-common \
+    ocl-icd-opencl-dev \
+    ocl-icd-dev \
+    opencl-headers && \
+    wget --no-verbose ${CMAKE_URL} -O /tmp/cmake.tar.gz && \
+    tar -zxf /tmp/cmake.tar.gz --strip=1 -C /usr --wildcards cmake*/bin/cmake cmake*/bin/ctest cmake*/share/cmake*/Modules cmake*/share/cmake*/Templates && \
+    apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    pip3 install flatbuffers numpy
+
+# Get ComputeCpp
+ENV COMPUTECPP_VERSION="https://computecpp.codeplay.com/downloads/computecpp-ce/latest/x86_64-linux-gnu.tar.gz"
+ENV COMPUTECPP_ROOT="/tmp/ComputeCpp/"
+RUN COMPUTECPP_TAR=$(echo ${COMPUTECPP_VERSION} | rev | cut -d'/' -f 1 | rev) && \
+    wget ${COMPUTECPP_VERSION} --no-verbose  && \
+    rm -rf ${COMPUTECPP_ROOT} && mkdir ${COMPUTECPP_ROOT} && \
+    tar -xzf ${COMPUTECPP_TAR} -C ${COMPUTECPP_ROOT} --strip-components 1 && \
+    rm ${COMPUTECPP_TAR} && \
+    ./${COMPUTECPP_ROOT}/bin/compute++ --version
+
+# Build SYCL-BLAS
+ARG SYCLBLAS_COMMIT="927113928e8bfa509bc42935a29ae767239d31fe"
+ARG SYCLBLAS_URL="https://github.com/codeplaysoftware/sycl-blas.git"
+ENV SYCL_BLAS_ROOT=/tmp/sycl-blas
+RUN git clone --recursive ${SYCLBLAS_URL} ${SYCL_BLAS_ROOT} && \
+    cd ${SYCL_BLAS_ROOT} && \
+    if [ ! -z "${SYCLBLAS_COMMIT}" ]; then git checkout ${SYCLBLAS_COMMIT} && git show -s --format='%h %s'; fi && \
+    mkdir -p build && cd build && \
+    cmake ../ -GNinja -DComputeCpp_DIR=${COMPUTECPP_ROOT} \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DSYCL_COMPILER=computecpp \
+        -DBLAS_ENABLE_CONST_INPUT=ON \
+        -DBLAS_ENABLE_TESTING=OFF \
+        -DBLAS_ENABLE_BENCHMARK=OFF \
+        -Wno-dev && \
+    cmake --build .
+
+# Build SYCL-DNN
+ARG SYCLDNN_COMMIT="6a637ffe0de9107eb3379257cae8554b11e49a10"
+ARG SYCLDNN_URL="https://github.com/codeplaysoftware/SYCL-DNN.git"
+ENV SYCL_DNN_ROOT=/tmp/sycl-dnn
+RUN git clone --recursive ${SYCLDNN_URL} ${SYCL_DNN_ROOT} && \
+    cd ${SYCL_DNN_ROOT} && \
+    if [ ! -z "${SYCLDNN_COMMIT}" ]; then git checkout ${SYCLDNN_COMMIT} && git show -s --format='%h %s'; fi && \
+    mkdir -p build && cd build && \
+    cmake ../ -GNinja -DComputeCpp_DIR=${COMPUTECPP_ROOT} \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DSNN_BUILD_BENCHMARKS=OFF \
+        -DSNN_BUILD_TESTS=OFF \
+        -DSNN_BUILD_SAMPLES=OFF \
+        -DSNN_DOWNLOAD_EIGEN=OFF \
+        -DSNN_BUILD_DOCUMENTATION=OFF \
+        -DSNN_BENCH_SYCLBLAS=OFF \
+        -DCMAKE_INSTALL_PREFIX=${SYCL_DNN_ROOT}/build/install \
+        -Wno-dev && \
+    cmake --build . && cmake --install .
+
+# Install OpenCL CPU runtime
+ENV OCL_PACKAGE_URL=https://registrationcenter-download.intel.com/akdlm/irc_nas/vcp/15532/l_opencl_p_18.1.0.015.tgz
+ENV OCL_PACKAGE_NAME=l_opencl_p_18.1.0.015
+RUN wget --no-verbose ${OCL_PACKAGE_URL} -O /tmp/opencl_runtime.tgz && \
+    tar -xzf /tmp/opencl_runtime.tgz -C /tmp && \
+    sed 's/decline/accept/g' -i /tmp/${OCL_PACKAGE_NAME}/silent.cfg && \
+    /tmp/${OCL_PACKAGE_NAME}/install.sh -s /tmp/${OCL_PACKAGE_NAME}/silent.cfg && \
+    rm /tmp/opencl_runtime.tgz && rm -rf /tmp/${OCL_PACKAGE_NAME}
+
+# Install OpenCL GPU runtime
+RUN cd /tmp && \
+    wget --no-verbose https://github.com/intel/compute-runtime/releases/download/21.37.20939/intel-gmmlib_21.2.1_amd64.deb && \
+    wget --no-verbose https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.8517/intel-igc-core_1.0.8517_amd64.deb && \
+    wget --no-verbose https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.8517/intel-igc-opencl_1.0.8517_amd64.deb && \
+    wget --no-verbose https://github.com/intel/compute-runtime/releases/download/21.37.20939/intel-opencl_21.37.20939_amd64.deb && \
+    ls && \
+    apt install ./*.deb && \
+    rm *.deb
+
+ARG BUILD_TYPE="Release"
+ADD . /source
+RUN cd /source && \
+    CC=gcc CXX=g++ COMPUTECPP_DIR=${COMPUTECPP_ROOT} ./build.sh \
+    --use_sycl --build_shared_lib \
+    --syclblas_home=${SYCL_BLAS_ROOT} \
+    --sycldnn_home=${SYCL_DNN_ROOT}/build/install \
+    --config ${BUILD_TYPE} --cmake_generator=Ninja \
+    --parallel --skip_tests --build \
+    --update --skip_submodule_sync --build_wheel \
+    --cmake_extra_defines SYCLDNN_DIR=${SYCL_DNN_ROOT}/build/install/lib/sycldnn/cmake

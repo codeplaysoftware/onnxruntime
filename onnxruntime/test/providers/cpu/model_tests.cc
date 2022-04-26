@@ -624,6 +624,8 @@ TEST_P(ModelTest, Run) {
         ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(DefaultAclExecutionProvider()));
       } else if (provider_name == "armnn") {
         ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(DefaultArmNNExecutionProvider()));
+      } else if (provider_name == "sycl") {
+        ASSERT_STATUS_OK(session_object.RegisterExecutionProvider(DefaultSyclExecutionProvider()));
       }
 
       ASSERT_STATUS_OK(session_object.Load(model_path));
@@ -744,6 +746,9 @@ TEST_P(ModelTest, Run) {
 #endif
 #ifdef USE_ARMNN
   provider_names.push_back(ORT_TSTR("armnn"));
+#endif
+#ifdef USE_SYCL
+  provider_names.push_back(ORT_TSTR("sycl"));
 #endif
   std::vector<std::basic_string<ORTCHAR_T>> v;
   // Permanently exclude following tests because ORT support only opset starting from 7,
