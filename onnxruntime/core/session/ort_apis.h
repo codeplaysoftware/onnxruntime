@@ -339,4 +339,7 @@ ORT_API_STATUS_IMPL(UpdateCUDAProviderOptions, _Inout_ OrtCUDAProviderOptionsV2*
                     size_t num_keys);
 ORT_API_STATUS_IMPL(GetCUDAProviderOptionsAsString, _In_ const OrtCUDAProviderOptionsV2* cuda_options, _Inout_ OrtAllocator* allocator, _Outptr_ char** ptr);
 ORT_API(void, ReleaseCUDAProviderOptions, _Frees_ptr_opt_ OrtCUDAProviderOptionsV2*);
+ORT_API_STATUS_IMPL(SessionOptionsAppendExecutionProvider_SYCL,
+                    _In_ OrtSessionOptions* options, _In_ const OrtSYCLProviderOptions* sycl_options);
+
 }  // namespace OrtApis

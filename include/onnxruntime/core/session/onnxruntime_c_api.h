@@ -515,6 +515,21 @@ typedef struct OrtOpenVINOProviderOptions {
   void* context;
 } OrtOpenVINOProviderOptions;
 
+/** \brief SYCL Provider Options
+*
+* \see OrtApi::SessionOptionsAppendExecutionProvider_SYCL
+*/
+typedef struct OrtSYCLProviderOptions {
+#ifdef __cplusplus
+  OrtSYCLProviderOptions() : device_selector{""}, device_vendor{""} {}
+#endif
+  // Both device info parameters are evaluated in a case sensitive way.
+  // Device selector should be provided in upper-case.
+  const char* device_selector;  // Mapped to SYCL device type ("CPU", "GPU", "HOST", "ACC", or "" for default selector)
+  const char* device_vendor;    // Device vendor to be specified (use case multiple devices of same type and different manufacturers)
+
+} OrtSYCLProviderOptions;
+
 struct OrtApi;
 typedef struct OrtApi OrtApi;
 
@@ -3284,6 +3299,17 @@ struct OrtApi {
   */
   ORT_API2_STATUS(SessionOptionsAppendExecutionProvider_MIGraphX,
                   _In_ OrtSessionOptions* options, _In_ const OrtMIGraphXProviderOptions* migraphx_options);
+
+  /** \brief Append SYCL execution provider to the session options
+   * 
+   * If SYCL is not available (due to a non SYCL enabled build, or if SYCL (DPCPP & ComputeCPP) are both not installed on the system), this function will return failure.
+   * 
+   * \param[in] options
+   * \param[in] sycl_options
+   */
+  ORT_API2_STATUS(SessionOptionsAppendExecutionProvider_SYCL,
+                  _In_ OrtSessionOptions* options, _In_ const OrtSYCLProviderOptions* sycl_options);
+  
   /// @}
 };
 

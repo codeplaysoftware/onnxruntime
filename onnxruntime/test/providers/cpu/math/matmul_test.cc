@@ -124,6 +124,10 @@ void RunMatMulTest(int32_t opset_version, bool is_a_constant, bool is_b_constant
       // NNAPI: currently fails for the "test 2D empty input" case
       excluded_providers.insert(kNnapiExecutionProvider);
     }
+    if (t.input0_dims.size() != t.input1_dims.size()) {
+      // SYCL EP: Doesn't support padding or broadcasting
+      excluded_providers.insert(kSyclExecutionProvider);
+    }
     test.Run(OpTester::ExpectResult::kExpectSuccess, "", excluded_providers);
   }
 }

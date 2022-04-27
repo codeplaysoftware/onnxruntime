@@ -161,7 +161,7 @@ TEST(MathOpTest, Add_Broadcast_Axis) {
   test.AddInput<float>("A", dims, lhs_values);
   test.AddInput<float>("B", {3, 1}, rhs_values);
   test.AddOutput<float>("C", dims, out_values);
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "");
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 
 #ifdef USE_CUDA
   TestFloat16("Add", dims, lhs_values, {3, 1}, rhs_values, dims, out_values);
@@ -183,7 +183,7 @@ TEST(MathOpTest, Add_Broadcast_MultidirectionalAB) {
             kOpenVINOExecutionProvider});  // OpenVINO: disabled temporarily due to accurarcy issues
 #else
   test.Run(OpTester::ExpectResult::kExpectSuccess, "",
-           {kTensorrtExecutionProvider});  // TensorRT: got C with shape [3, 1]
+           {kTensorrtExecutionProvider, kSyclExecutionProvider});  // TensorRT: got C with shape [3, 1]
 #endif
 
 #ifdef USE_CUDA
@@ -205,7 +205,7 @@ TEST(MathOpTest, Add_Broadcast_MultidirectionalBA) {
             kOpenVINOExecutionProvider});  // OpenVINO: disabled temporarily due to accurarcy issues
 #else
   test.Run(OpTester::ExpectResult::kExpectSuccess, "",
-           {kTensorrtExecutionProvider});  // TensorRT: got C with shape [3, 1]
+           {kTensorrtExecutionProvider, kSyclExecutionProvider});  // TensorRT: got C with shape [3, 1]
 #endif
 
 #ifdef USE_CUDA
@@ -232,7 +232,7 @@ TEST(MathOpTest, Add_Broadcast_0x1) {
 #if defined(OPENVINO_CONFIG_MYRIAD)
     test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kOpenVINOExecutionProvider});  // OpenVINO: disabled temporarily on MYRIADX due to a bug
 #else
-    test.Run(OpTester::ExpectResult::kExpectSuccess, "");
+    test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 #endif
   };
 
@@ -250,7 +250,7 @@ TEST(MathOpTest, Add_Broadcast_1x0) {
 #if defined(OPENVINO_CONFIG_MYRIAD)
     test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kOpenVINOExecutionProvider});  // OpenVINO: disabled temporarily on MYRIADX due to a bug
 #else
-    test.Run(OpTester::ExpectResult::kExpectSuccess, "");
+    test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 #endif
   };
 
@@ -283,7 +283,7 @@ TEST(MathOpTest, Add_Broadcast_3x2_3x1) {
                         {2.0f, 3.0f,
                          5.0f, 6.0f,
                          8.0f, 9.0f});
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "");
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kSyclExecutionProvider});
 }
 
 TEST(MathOpTest, Add_Broadcast_2x1x4_1x3x1) {
@@ -303,7 +303,7 @@ TEST(MathOpTest, Add_Broadcast_2x1x4_1x3x1) {
                          221.0f, 222.0f, 223.0f, 224.0f,
                          231.0f, 232.0f, 233.0f, 234.0f});
 
-  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider, kSyclExecutionProvider});
 }
 
 TEST(MathOpTest, Add_Broadcast_2x1x1_3x4) {
@@ -331,6 +331,7 @@ TEST(MathOpTest, Add_Broadcast_2x1x1_3x4) {
   // OpenVINO VPU: Disabled due to software limitation
   excluded_providers.insert(kOpenVINOExecutionProvider);
 #endif
+  excluded_providers.insert(kSyclExecutionProvider);
   test.Run(OpTester::ExpectResult::kExpectSuccess, "", excluded_providers);  //TensorRT: Input batch size is inconsistent
 }
 

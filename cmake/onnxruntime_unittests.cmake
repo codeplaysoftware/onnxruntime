@@ -163,6 +163,11 @@ function(AddTest)
         COMMAND ${NODE_EXECUTABLE} ${TEST_NODE_FLAGS} ${_UT_TARGET}.js ${TEST_ARGS}
         WORKING_DIRECTORY $<TARGET_FILE_DIR:${_UT_TARGET}>
       )
+    elseif(${onnxruntime_USE_SYCL})
+      include(GoogleTest)
+      gtest_discover_tests(${NAME} ${_UT_TARGET}
+        WORKING_DIRECTORY $<TARGET_FILE_DIR:${_UT_TARGET}>
+      )
     else()
       add_test(NAME ${_UT_TARGET}
         COMMAND ${_UT_TARGET} ${TEST_ARGS}
@@ -456,6 +461,10 @@ if(onnxruntime_USE_COREML)
   endif()
 endif()
 
+if(onnxruntime_USE_SYCL)
+  list(APPEND onnxruntime_test_providers_dependencies onnxruntime_providers_sycl)
+endif()
+
 file(GLOB_RECURSE onnxruntime_test_tvm_src CONFIGURE_DEPENDS
   "${TEST_SRC_DIR}/tvm/*.h"
   "${TEST_SRC_DIR}/tvm/*.cc"
@@ -492,6 +501,7 @@ set(ONNXRUNTIME_TEST_LIBS
     ${PROVIDERS_ACL}
     ${PROVIDERS_ARMNN}
     ${PROVIDERS_COREML}
+    ${PROVIDERS_SYCL}
     # ${PROVIDERS_STVM}
     onnxruntime_optimizer
     onnxruntime_providers
@@ -532,6 +542,13 @@ if(onnxruntime_USE_RKNPU)
   list(APPEND onnxruntime_test_framework_libs onnxruntime_providers_rknpu)
   list(APPEND onnxruntime_test_providers_dependencies onnxruntime_providers_rknpu)
   list(APPEND onnxruntime_test_providers_libs onnxruntime_providers_rknpu)
+endif()
+
+if(onnxruntime_USE_SYCL)
+  list(APPEND onnxruntime_test_framework_src_patterns  ${TEST_SRC_DIR}/providers/sycl/*)
+  list(APPEND onnxruntime_test_framework_libs onnxruntime_providers_sycl)
+  list(APPEND onnxruntime_test_providers_dependencies onnxruntime_providers_sycl)
+  list(APPEND onnxruntime_test_providers_libs onnxruntime_providers_sycl)
 endif()
 
 if(onnxruntime_USE_COREML)

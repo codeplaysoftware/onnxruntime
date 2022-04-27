@@ -15,12 +15,14 @@ struct OrtDevice {
   static const DeviceType CPU = 0;
   static const DeviceType GPU = 1;  // Nvidia or AMD
   static const DeviceType FPGA = 2;
+  static const DeviceType SYCL_DEVICE = 3;
 
   struct MemType {
     // Pre-defined memory types.
     static const MemoryType DEFAULT = 0;
     static const MemoryType CUDA_PINNED = 1;
     static const MemoryType HIP_PINNED = 2;
+    static const MemoryType SYCL_MEMORY = 3;
   };
 
   constexpr OrtDevice(DeviceType device_type_, MemoryType memory_type_, DeviceId device_id_)

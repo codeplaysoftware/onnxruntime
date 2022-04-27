@@ -81,6 +81,13 @@ void addGlobalSchemaFunctions(pybind11::module& m) {
 #ifdef USE_COREML
             onnxruntime::CreateExecutionProviderFactory_CoreML(0),
 #endif
+#ifdef USE_SYCL
+            onnxruntime::CreateExecutionProviderFactory_SYCL(
+                [&]() {
+                  SYCLExecutionProviderInfo info{};
+                  return info;
+                }()),
+#endif
         };
 
         for (const auto& f : factories) {

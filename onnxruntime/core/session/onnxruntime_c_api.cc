@@ -2522,6 +2522,7 @@ static constexpr OrtApi ort_api_1_to_11 = {
     &OrtApis::GetCUDAProviderOptionsAsString,
     &OrtApis::ReleaseCUDAProviderOptions,
     &OrtApis::SessionOptionsAppendExecutionProvider_MIGraphX,
+    &OrtApis::SessionOptionsAppendExecutionProvider_SYCL,
 };
 
 // Asserts to do a some checks to ensure older Versions of the OrtApi never change (will detect an addition or deletion but not if they cancel out each other)

@@ -59,6 +59,24 @@ void TestConvOp(const ConvOpAndTestAttributes& attributes,
   std::unordered_set<std::string> excluded_providers(attributes.excluded_providers);
   // Disable TensorRT because weight as input is not supported
   excluded_providers.insert(kTensorrtExecutionProvider);
+  if (attributes.group != 1) {
+    // SYCL EP: No support for groups
+    excluded_providers.insert(kSyclExecutionProvider);
+  }
+  if (std::any_of(attributes.dilations.begin(), attributes.dilations.end(), [](int i) { return i != 1; })) {
+    // SYCL EP: No support for dilations
+    excluded_providers.insert(kSyclExecutionProvider);
+  }
+  if (input_shapes[0].size() > 4 && std::any_of(std::next(input_shapes[0].begin(), 4), input_shapes[0].end(), [](int i) { return i != 1; })) {
+    // SYCL EP: No support for 3D input, unless can be flattened
+    excluded_providers.insert(kSyclExecutionProvider);
+  }
+  for (size_t index = 2; index < attributes.pads.size(); index++) {
+    if (attributes.pads[index - 2] != attributes.pads[index]) {
+      // SYCL EP: No support for uneven padding
+      excluded_providers.insert(kSyclExecutionProvider);
+    }
+  }
 
   test.Run(expect_result, err_str, excluded_providers);
 }
@@ -113,7 +131,7 @@ TEST(ConvTest, Conv1D_1_DefaultStridesAndDilations) {
                         -0.012766072526574135f, 0.07113571465015411f, 0.061429332941770554f};
 
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape);
-  
+
   // CoreML EP requires weight to be an initializer
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
@@ -150,7 +168,7 @@ TEST(ConvTest, Conv1D_2) {
                         -0.18779152631759644f, -0.11083387583494186f};
 
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape);
-  
+
   // CoreML EP requires weight to be an initializer
   TestConvOp(attrs, {X, W}, {X_shape, W_shape}, expected_vals, Y_shape, true);
 }
