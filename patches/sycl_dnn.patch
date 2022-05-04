@@ -1,0 +1,1680 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 05f9464..4afac51 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -14,6 +14,8 @@
+ #
+ cmake_minimum_required(VERSION 3.10.2)
+ 
++include(CheckCXXCompilerFlag)
++
+ project(sycldnn LANGUAGES C CXX VERSION 0.6.0)
+ 
+ # Configuration options controlling automatic downloading of dependencies.
+@@ -48,6 +50,7 @@ option(SNN_INSTALL_SAMPLES
+   "Whether or not to include samples when installing" OFF)
+ 
+ option(SNN_TRISYCL "Use TriSYCL (default is ComputeCpp)" OFF)
++option(SNN_DPCPP "Use DPCPP (default is ComputeCpp)" OFF)
+ option(SNN_FASTBUILD
+   "Disable setting the cmake build type if no flag specified" OFF)
+ 
+@@ -136,6 +139,12 @@ endif()
+ 
+ if(SNN_TRISYCL)
+   find_package(TriSYCL)
++elseif(SNN_DPCPP)
++  set(CMAKE_CXX_STANDARD 17)
++  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__SYCL_DISABLE_NAMESPACE_INLINE__=ON -O3 -Xclang -cl-mad-enable")
++  set(DPCPP_SYCL_TARGET spir64)
++  find_package(DPCPP REQUIRED)
++  get_target_property(DPCPP_INCLUDE_DIRS DPCPP::DPCPP INTERFACE_INCLUDE_DIRECTORIES)
+ else()
+   find_package(ComputeCpp)
+   option(SNN_COMPUTECPP_USE_SERIAL_MEMOP
+@@ -187,6 +196,14 @@ set_target_properties(sycl_dnn PROPERTIES
+   SOVERSION ${sycldnn_VERSION}
+ )
+ 
++if (SNN_DPCPP)
++  set_target_properties(sycl_dnn PROPERTIES
++    INTERFACE_INCLUDE_DIRECTORIES "${DPCPP_INCLUDE_DIRS}"
++    INTERFACE_LINK_LIBRARIES DPCPP::DPCPP
++  )
++  add_sycl_to_target(TARGET sycl_dnn SOURCES)
++endif()
++
+ add_library(sycl_dnn_static STATIC
+   $<TARGET_OBJECTS:direct_conv2d>
+   $<TARGET_OBJECTS:tiled_conv2d>
+@@ -209,6 +226,14 @@ set_target_properties(sycl_dnn_static PROPERTIES
+   VERSION ${sycldnn_VERSION}
+ )
+ 
++if (SNN_DPCPP)
++  set_target_properties(sycl_dnn PROPERTIES
++    INTERFACE_INCLUDE_DIRECTORIES "${DPCPP_INCLUDE_DIRS}"
++    INTERFACE_LINK_LIBRARIES DPCPP::DPCPP
++  )
++  add_sycl_to_target(TARGET sycl_dnn SOURCES)
++endif()
++
+ include(GenerateExportHeader)
+ generate_export_header(sycl_dnn
+   BASE_NAME "SNN"
+diff --git a/cmake/Modules/FindDPCPP.cmake b/cmake/Modules/FindDPCPP.cmake
+new file mode 100644
+index 0000000..09ddeae
+--- /dev/null
++++ b/cmake/Modules/FindDPCPP.cmake
+@@ -0,0 +1,57 @@
++#.rst:
++# FindDPDPP
++#---------------
++#
++#   Copyright Codeplay Software Ltd.
++#
++#   Licensed under the Apache License, Version 2.0 (the "License");
++#   you may not use these files except in compliance with the License.
++#   You may obtain a copy of the License at
++#
++#       http://www.apache.org/licenses/LICENSE-2.0
++#
++#
++#   Unless required by applicable law or agreed to in writing, software
++#   distributed under the License is distributed on an "AS IS" BASIS,
++#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++#   See the License for the specific language governing permissions and
++#   limitations under the License.
++
++#########################
++#  FindDPDPP.cmake
++#########################
++
++include_guard()
++
++include(CheckCXXCompilerFlag)
++include(FindPackageHandleStandardArgs)
++
++get_filename_component(DPCPP_BIN_DIR ${CMAKE_CXX_COMPILER} DIRECTORY)
++find_library(DPCPP_LIB_DIR NAMES sycl PATHS "${DPCPP_BIN_DIR}/../lib")
++
++add_library(DPCPP::DPCPP INTERFACE IMPORTED)
++
++set_target_properties(DPCPP::DPCPP PROPERTIES
++INTERFACE_COMPILE_OPTIONS "-fsycl;-fsycl-targets=${DPCPP_SYCL_TARGET}"
++INTERFACE_LINK_OPTIONS "-fsycl;-fsycl-targets=${DPCPP_SYCL_TARGET}"
++INTERFACE_LINK_LIBRARIES ${DPCPP_LIB_DIR}
++INTERFACE_INCLUDE_DIRECTORIES "${DPCPP_BIN_DIR}/../include/sycl")
++
++function(add_sycl_to_target)
++  set(options)
++  set(one_value_args TARGET)
++  set(multi_value_args SOURCES)
++  cmake_parse_arguments(SB_ADD_SYCL
++    "${options}"
++    "${one_value_args}"
++    "${multi_value_args}"
++    ${ARGN}
++  )
++  target_compile_options(${SB_ADD_SYCL_TARGET} PUBLIC -fsycl
++                          PUBLIC -fsycl-targets=${DPCPP_SYCL_TARGET})
++  get_target_property(target_type ${SB_ADD_SYCL_TARGET} TYPE)
++  if (NOT target_type STREQUAL "OBJECT_LIBRARY")
++    target_link_options(${SB_ADD_SYCL_TARGET} PUBLIC -fsycl
++                        PUBLIC -fsycl-targets=${DPCPP_SYCL_TARGET})
++  endif()                             
++endfunction()
+diff --git a/include/sycldnn/backend/snn_backend.h b/include/sycldnn/backend/snn_backend.h
+index 9b4491a..ac24689 100644
+--- a/include/sycldnn/backend/snn_backend.h
++++ b/include/sycldnn/backend/snn_backend.h
+@@ -20,7 +20,7 @@
+ #include "sycldnn/backend/snn_matmul_provider.h"
+ #include "sycldnn/backend/snn_reduce_provider.h"
+ 
+-#include <SYCL/codeplay.hpp>
++#include <CL/sycl.hpp>
+ #include <numeric>
+ 
+ namespace sycldnn {
+@@ -74,7 +74,7 @@ struct SNNBackend final : public SNNMatmulProvider<SNNBackend>,
+    *
+    * \param queue The SYCL queue to use with this backend.
+    */
+-  SNNBackend(cl::sycl::queue queue) : queue_{std::move(queue)} {}
++  SNNBackend(cl::sycl::queue& queue) : queue_{queue} {}
+ 
+   /**
+    * Allocate a tensor to be used internally.
+diff --git a/include/sycldnn/binaryop/launch.h b/include/sycldnn/binaryop/launch.h
+index aedab90..ae54b05 100644
+--- a/include/sycldnn/binaryop/launch.h
++++ b/include/sycldnn/binaryop/launch.h
+@@ -87,15 +87,24 @@ SNNStatus launch(typename Backend::template pointer_type<T const> lhs,
+     return validation_status;
+   }
+ 
+-  auto inp1_mem =
++  auto lhs_mem =
+       backend.get_mem_object(lhs, static_cast<size_t>(params.lhs_items));
+-  auto inp2_mem =
++  auto rhs_mem =
+       backend.get_mem_object(rhs, static_cast<size_t>(params.rhs_items));
+-  auto outp_mem =
+-      backend.get_mem_object(output, static_cast<size_t>(params.lhs_items));
+   auto queue = backend.get_queue();
+-  return internal::launch_binaryop<T, Op>(inp1_mem, inp2_mem, outp_mem,
+-                                          params.rhs_items, queue);
++
++  if (params.lhs_items < params.rhs_items) {
++    BinaryParams new_params{params.rhs_items, params.lhs_items};
++    auto outp_mem =
++        backend.get_mem_object(output, static_cast<size_t>(params.rhs_items));
++    return internal::launch_binaryop<T, Op>(rhs_mem, lhs_mem, outp_mem,
++                                            new_params, queue);
++  } else {
++    auto outp_mem =
++        backend.get_mem_object(output, static_cast<size_t>(params.lhs_items));
++    return internal::launch_binaryop<T, Op>(lhs_mem, rhs_mem, outp_mem, params,
++                                            queue);
++  }
+ }
+ 
+ }  // namespace binaryop
+diff --git a/include/sycldnn/internal/batchnorm/launch_internal.h b/include/sycldnn/internal/batchnorm/launch_internal.h
+index 112db56..cf04403 100644
+--- a/include/sycldnn/internal/batchnorm/launch_internal.h
++++ b/include/sycldnn/internal/batchnorm/launch_internal.h
+@@ -28,6 +28,7 @@
+ #include "sycldnn/internal/batchnorm/launch_batchnorm.h"
+ 
+ #include "sycldnn/binaryop/operators.h"
++#include "sycldnn/binaryop/params.h"
+ #include "sycldnn/internal/binaryop/launch.h"
+ 
+ #include "sycldnn/reduce/operators.h"
+@@ -184,9 +185,10 @@ SNNStatus launch_grad(typename Backend::template pointer_type<T const> input,
+   auto gradient_mem = backend.get_mem_object(gradient, n_items);
+   auto workspace_mem = backend.get_mem_object(workspace, n_items);
+ 
++  sycldnn::binaryop::BinaryParams sub_params{n_items, params.channels};
+   status =
+       sycldnn::binaryop::internal::launch_binaryop<T, sycldnn::binaryop::Sub>(
+-          input_mem, const_input_mean_mem, workspace_mem, params.channels,
++          input_mem, const_input_mean_mem, workspace_mem, sub_params,
+           queue);  // x_offset
+ 
+   if (sycldnn::StatusCode::OK != status.status) return status;
+@@ -202,7 +204,7 @@ SNNStatus launch_grad(typename Backend::template pointer_type<T const> input,
+ 
+   status =
+       sycldnn::binaryop::internal::launch_binaryop<T, sycldnn::binaryop::Sub>(
+-          gradient_mem, const_gradient_mean_mem, output_mem, params.channels,
++          gradient_mem, const_gradient_mean_mem, output_mem, sub_params,
+           queue);  // grad_y_offset
+ 
+   if (sycldnn::StatusCode::OK != status.status) return status;
+@@ -216,9 +218,11 @@ SNNStatus launch_grad(typename Backend::template pointer_type<T const> input,
+   auto secondary_workspace_mem =
+       backend.get_mem_object(secondary_workspace, n_items);
+ 
++  sycldnn::binaryop::BinaryParams mul_params{n_items, n_items};
+   status =
+       sycldnn::binaryop::internal::launch_binaryop<T, sycldnn::binaryop::Mul>(
+-          gradient_mem, const_workspace_mem, secondary_workspace_mem, n_items,
++          gradient_mem, const_workspace_mem, secondary_workspace_mem,
++          mul_params,
+           queue);  // mean pt 1
+ 
+   if (sycldnn::StatusCode::OK != status.status) return status;
+diff --git a/include/sycldnn/internal/binaryop/launch.h b/include/sycldnn/internal/binaryop/launch.h
+index b225488..0298ee9 100644
+--- a/include/sycldnn/internal/binaryop/launch.h
++++ b/include/sycldnn/internal/binaryop/launch.h
+@@ -20,6 +20,8 @@
+ #include "sycldnn/mem_object.h"
+ #include "sycldnn/status.h"
+ 
++#include "sycldnn/binaryop/params.h"
++
+ #include "sycldnn/export.h"
+ 
+ namespace sycldnn {
+@@ -30,7 +32,7 @@ template <typename T, typename Op>
+ SNN_EXPORT SNNStatus launch_binaryop(BaseMemObject<T const>& lhs,
+                                      BaseMemObject<T const>& rhs,
+                                      BaseMemObject<T>& output,
+-                                     int32_t const n_items,
++                                     const BinaryParams& params,
+                                      cl::sycl::queue& queue);
+ 
+ }  // namespace internal
+diff --git a/include/sycldnn/internal/softmax/launch_internal.h b/include/sycldnn/internal/softmax/launch_internal.h
+index bcf3604..58c54e2 100644
+--- a/include/sycldnn/internal/softmax/launch_internal.h
++++ b/include/sycldnn/internal/softmax/launch_internal.h
+@@ -24,6 +24,7 @@
+ #include "sycldnn/pointwise/operators.h"
+ 
+ #include "sycldnn/binaryop/operators.h"
++#include "sycldnn/binaryop/params.h"
+ #include "sycldnn/internal/binaryop/launch.h"
+ 
+ #include "sycldnn/reduce/operators.h"
+@@ -76,10 +77,10 @@ SNNStatus launch(typename Backend::template pointer_type<T const> input,
+   auto const_output = ConstPointer{output};
+   auto const_output_mem = backend.get_mem_object(const_output, n_items);
+ 
++  binaryop::BinaryParams div_params{params.channels, params.channels};
+   status =
+       binaryop::internal::launch_binaryop<T, binaryop::internal::SoftmaxDiv>(
+-          const_output_mem, const_workspace_mem, out_mem, params.channels,
+-          queue);
++          const_output_mem, const_workspace_mem, out_mem, div_params, queue);
+   return status;
+ }
+ 
+@@ -106,8 +107,9 @@ SNNStatus launch(typename Backend::template pointer_type<T const> input,
+ 
+   auto queue = backend.get_queue();
+ 
++  binaryop::BinaryParams mul_params{n_items1, n_items1};
+   SNNStatus status = binaryop::internal::launch_binaryop<T, binaryop::Mul>(
+-      grad_mem, in_mem, workspace_mem, n_items1, queue);
++      grad_mem, in_mem, workspace_mem, mul_params, queue);
+ 
+   if (sycldnn::StatusCode::OK != status.status) return status;
+ 
+@@ -123,14 +125,15 @@ SNNStatus launch(typename Backend::template pointer_type<T const> input,
+   auto const_output = ConstPointer{output};
+   auto const_output_mem = backend.get_mem_object(const_output, n_items2);
+ 
++  binaryop::BinaryParams sub_params{params.channels, params.channels};
+   status =
+       binaryop::internal::launch_binaryop<T, binaryop::internal::SoftmaxSub>(
+-          grad_mem, const_output_mem, workspace_mem, params.channels, queue);
++          grad_mem, const_output_mem, workspace_mem, sub_params, queue);
+ 
+   if (sycldnn::StatusCode::OK != status.status) return status;
+ 
+   status = binaryop::internal::launch_binaryop<T, binaryop::Mul>(
+-      const_workspace_mem, in_mem, out_mem, n_items1, queue);
++      const_workspace_mem, in_mem, out_mem, mul_params, queue);
+ 
+   return status;
+ }
+diff --git a/samples/networks/resnet50/resnet50.cc b/samples/networks/resnet50/resnet50.cc
+index 0fcc2c6..1a09e74 100644
+--- a/samples/networks/resnet50/resnet50.cc
++++ b/samples/networks/resnet50/resnet50.cc
+@@ -379,6 +379,10 @@ int main(int argc, char* argv[]) {
+       }
+     }
+   });
++  std::cout << "Running on: "
++            << q.get_device().get_info<cl::sycl::info::device::name>() << ", "
++            << q.get_device().get_info<cl::sycl::info::device::vendor>()
++            << "\n";
+   Backend backend(q);
+   auto selector = sycldnn::conv2d::get_default_selector(q.get_device());
+   std::vector<DType> output;
+diff --git a/samples/networks/vgg/vgg.cc b/samples/networks/vgg/vgg.cc
+index 35d61af..a6c3668 100644
+--- a/samples/networks/vgg/vgg.cc
++++ b/samples/networks/vgg/vgg.cc
+@@ -272,6 +272,10 @@ int main(int argc, char* argv[]) {
+       }
+     }
+   });
++  std::cout << "Running on: "
++            << q.get_device().get_info<cl::sycl::info::device::name>() << ", "
++            << q.get_device().get_info<cl::sycl::info::device::vendor>()
++            << "\n";
+   Backend backend(q);
+   auto selector = sycldnn::conv2d::get_default_selector(q.get_device());
+   std::vector<DType> output;
+diff --git a/src/batchnorm/gradient/frozen/kernels.h b/src/batchnorm/gradient/frozen/kernels.h
+index 8c73745..bedc6dc 100644
+--- a/src/batchnorm/gradient/frozen/kernels.h
++++ b/src/batchnorm/gradient/frozen/kernels.h
+@@ -42,7 +42,7 @@ class InputGradientFrozen {
+   float const epsilon_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index idx = item.get_id(0);
+ 
+     if (idx < n_items_) {
+@@ -95,7 +95,7 @@ class GammaGradientFrozen {
+   float const epsilon_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index idx = item.get_id(0);
+ 
+     if (idx < n_items_) {
+diff --git a/src/batchnorm/gradient/training/kernels.h b/src/batchnorm/gradient/training/kernels.h
+index fec8c38..db17769 100644
+--- a/src/batchnorm/gradient/training/kernels.h
++++ b/src/batchnorm/gradient/training/kernels.h
+@@ -42,7 +42,7 @@ class InputGradientTraining {
+   float const epsilon_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index idx = item.get_id(0);
+ 
+     if (idx < n_items_) {
+@@ -104,7 +104,7 @@ class GammaGradientTraining {
+   const float epsilon_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index idx = item.get_id(0);
+ 
+     if (idx < n_items_) {
+diff --git a/src/batchnorm/kernels.h b/src/batchnorm/kernels.h
+index 5a84cb3..a9942f1 100644
+--- a/src/batchnorm/kernels.h
++++ b/src/batchnorm/kernels.h
+@@ -44,7 +44,7 @@ class VarianceOp {
+   const Index n_items_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index idx = item.get_id(0);
+ 
+     if (idx < n_items_) {
+@@ -94,7 +94,7 @@ class RunningMeanVarianceOp {
+   const float momentum_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index idx = item.get_id(0);
+ 
+     if (idx < n_items_) {
+@@ -148,7 +148,7 @@ class BatchNormOp {
+   BatchNormParams params_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index idx = item.get_id(0);
+ 
+     if (idx < n_items_) {
+diff --git a/src/binaryop/kernels.h b/src/binaryop/kernels.h
+index 7069c14..a619762 100644
+--- a/src/binaryop/kernels.h
++++ b/src/binaryop/kernels.h
+@@ -70,35 +70,27 @@ class BinaryOp {
+ 
+   ReadAccessor<T const> lhs_, rhs_;
+   WriteAccessor<T> out_data_;
+-  const Index n_iterations_, n_offset_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
+-    Index idx1 = item.get_id(0) * VectorWidth;
+-    Index idx2 = idx1;
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<2> item) const {
++    Index rhs_idx = static_cast<Index>(item.get_id(1) * VectorWidth);
++    Index lhs_idx =
++        static_cast<Index>(item.get_id(0) * rhs_.get_extent()) + rhs_idx;
+ 
+-    const auto in1 = lhs_.get_pointer();
+-    const auto in2 = rhs_.get_pointer();
++    const auto lhs = lhs_.get_pointer();
++    const auto rhs = rhs_.get_pointer();
+     auto out = out_data_.get_pointer();
+ 
+     Op op;
+-    auto rhs_val = Load()(in2, idx2);
+-
+-    for (Index i = 0; i < n_iterations_; i++) {
+-      auto lhs_val = Load()(in1, idx1);
+-      auto out_val = op.apply(lhs_val, rhs_val);
+-      Store()(out, idx1, out_val);
+-      idx1 += n_offset_;
+-    }
++    auto lhs_val = Load()(lhs, lhs_idx);
++    auto rhs_val = Load()(rhs, rhs_idx);
++    auto out_val = op.apply(lhs_val, rhs_val);
++    Store()(out, lhs_idx, out_val);
+   }
+ 
+   BinaryOp(ReadAccessor<T const> lhs, ReadAccessor<T const> rhs,
+            WriteAccessor<T> out_data)
+-      : lhs_(lhs),
+-        rhs_(rhs),
+-        out_data_(out_data),
+-        n_iterations_(static_cast<Index>(lhs.get_extent() / rhs.get_extent())),
+-        n_offset_(static_cast<Index>(rhs.get_extent())) {}
++      : lhs_(lhs), rhs_(rhs), out_data_(out_data) {}
+ };
+ 
+ template <typename T, typename Index, int VectorWidth>
+@@ -114,21 +106,21 @@ class BinaryOp<T, internal::SoftmaxSub, Index, VectorWidth> {
+   const Index n_offset_, n_iterations_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
+-    Index idx = item.get_id(0) * VectorWidth;
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<2> item) const {
++    Index lhs_idx = static_cast<Index>(item.get_id(1) * VectorWidth);
+ 
+-    const auto in1 = lhs_.get_pointer();
+-    const auto in2 = rhs_.get_pointer();
++    const auto lhs = lhs_.get_pointer();
++    const auto rhs = rhs_.get_pointer();
+     auto out = out_data_.get_pointer();
+ 
+     Sub op;
+ 
+     for (Index i = 0; i < n_iterations_; i++) {
+-      auto lhs_val = Load()(in1, idx);
+-      auto rhs_val = ScalarLoad()(in2, i);
++      auto lhs_val = Load()(lhs, lhs_idx);
++      auto rhs_val = ScalarLoad()(rhs, i);
+       auto out_val = op.apply(lhs_val, static_cast<DataT>(rhs_val));
+-      Store()(out, idx, out_val);
+-      idx += n_offset_;
++      Store()(out, lhs_idx, out_val);
++      lhs_idx += n_offset_;
+     }
+   }
+ 
+@@ -154,21 +146,21 @@ class BinaryOp<T, internal::SoftmaxDiv, Index, VectorWidth> {
+   const Index n_offset_, n_iterations_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
+-    Index idx = item.get_id(0) * VectorWidth;
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<2> item) const {
++    Index lhs_idx = static_cast<Index>(item.get_id(1) * VectorWidth);
+ 
+-    const auto in1 = lhs_.get_pointer();
+-    const auto in2 = rhs_.get_pointer();
++    const auto lhs = lhs_.get_pointer();
++    const auto rhs = rhs_.get_pointer();
+     auto out = out_data_.get_pointer();
+ 
+     Div op;
+ 
+     for (Index i = 0; i < n_iterations_; i++) {
+-      auto lhs_val = Load()(in1, idx);
+-      auto rhs_val = ScalarLoad()(in2, i);
++      auto lhs_val = Load()(lhs, lhs_idx);
++      auto rhs_val = ScalarLoad()(rhs, i);
+       auto out_val = op.apply(lhs_val, static_cast<DataT>(rhs_val));
+-      Store()(out, idx, out_val);
+-      idx += n_offset_;
++      Store()(out, lhs_idx, out_val);
++      lhs_idx += n_offset_;
+     }
+   }
+ 
+diff --git a/src/binaryop/launch_binaryop.cc b/src/binaryop/launch_binaryop.cc
+index efdb06e..8f617b7 100644
+--- a/src/binaryop/launch_binaryop.cc
++++ b/src/binaryop/launch_binaryop.cc
+@@ -16,6 +16,8 @@
+ 
+ #include "sycldnn/binaryop/operators.h"
+ 
++#include "sycldnn/binaryop/params.h"
++
+ #include "sycldnn/internal/binaryop/launch.h"
+ 
+ #include "src/binaryop/queue_binaryop_kernel.h"
+@@ -31,21 +33,23 @@ namespace internal {
+ template <typename T, typename Op>
+ SNNStatus launch_binaryop(BaseMemObject<T const>& lhs,
+                           BaseMemObject<T const>& rhs, BaseMemObject<T>& output,
+-                          int32_t const n_items, cl::sycl::queue& queue) {
++                          const BinaryParams& params, cl::sycl::queue& queue) {
++  using Index = int32_t;
++  Index n_items = params.rhs_items;
+   if (n_items % 4 == 0) {
+-    return queue_binaryop<T, Op, int32_t, 4>(lhs, rhs, output, n_items, queue);
++    return queue_binaryop<T, Op, Index, 4>(lhs, rhs, output, params, queue);
+   } else if (n_items % 2 == 0) {
+-    return queue_binaryop<T, Op, int32_t, 2>(lhs, rhs, output, n_items, queue);
++    return queue_binaryop<T, Op, Index, 2>(lhs, rhs, output, params, queue);
+   } else {
+-    return queue_binaryop<T, Op, int32_t, 1>(lhs, rhs, output, n_items, queue);
++    return queue_binaryop<T, Op, Index, 1>(lhs, rhs, output, params, queue);
+   }
+ }
+ 
+-#define INSTANTIATE_BINARYOP_LAUNCH(DTYPE, OP)                   \
+-  template SNN_EXPORT SNNStatus launch_binaryop<DTYPE, OP>(      \
+-      BaseMemObject<DTYPE const> & inp1_access,                  \
+-      BaseMemObject<DTYPE const> & inp2_access,                  \
+-      BaseMemObject<DTYPE> & outp_access, int32_t const n_items, \
++#define INSTANTIATE_BINARYOP_LAUNCH(DTYPE, OP)                        \
++  template SNN_EXPORT SNNStatus launch_binaryop<DTYPE, OP>(           \
++      BaseMemObject<DTYPE const> & inp1_access,                       \
++      BaseMemObject<DTYPE const> & inp2_access,                       \
++      BaseMemObject<DTYPE> & outp_access, const BinaryParams& params, \
+       cl::sycl::queue& queue)
+ 
+ #define INSTANTIATE_BINARYOP_FOR_TYPE(DTYPE)      \
+diff --git a/src/binaryop/queue_binaryop_kernel.h b/src/binaryop/queue_binaryop_kernel.h
+index dda09c7..0998f30 100644
+--- a/src/binaryop/queue_binaryop_kernel.h
++++ b/src/binaryop/queue_binaryop_kernel.h
+@@ -17,6 +17,8 @@
+ #ifndef SYCLDNN_SRC_BINARYOP_QUEUE_H_
+ #define SYCLDNN_SRC_BINARYOP_QUEUE_H_
+ 
++#include "sycldnn/binaryop/params.h"
++
+ namespace sycldnn {
+ namespace binaryop {
+ namespace internal {
+@@ -24,7 +26,7 @@ namespace internal {
+ template <typename T, typename Op, typename Index, int VectorWidth>
+ SNNStatus queue_binaryop(BaseMemObject<T const>& lhs,
+                          BaseMemObject<T const>& rhs, BaseMemObject<T>& output,
+-                         int32_t const n_items, cl::sycl::queue& queue);
++                         const BinaryParams& params, cl::sycl::queue& queue);
+ 
+ }  // namespace internal
+ }  // namespace binaryop
+diff --git a/src/binaryop/queue_binaryop_kernel_impl.cc.in b/src/binaryop/queue_binaryop_kernel_impl.cc.in
+index 1463a78..5ae01ad 100644
+--- a/src/binaryop/queue_binaryop_kernel_impl.cc.in
++++ b/src/binaryop/queue_binaryop_kernel_impl.cc.in
+@@ -17,6 +17,8 @@
+ 
+ #include "sycldnn/binaryop/operators.h"
+ 
++#include "sycldnn/binaryop/params.h"
++
+ #include <CL/sycl.hpp>
+ 
+ // clang-format off
+@@ -35,7 +37,7 @@ template SNNStatus
+ queue_binaryop<SNN_DATA_TYPE, SNN_OP_TYPE, SNN_INDEX_TYPE, SNN_VECTOR_WIDTH>(
+     BaseMemObject<SNN_DATA_TYPE const>& input1,
+     BaseMemObject<SNN_DATA_TYPE const>& input2,
+-    BaseMemObject<SNN_DATA_TYPE>& output, SNN_INDEX_TYPE const n_items,
++    BaseMemObject<SNN_DATA_TYPE>& output, const BinaryParams& params,
+     cl::sycl::queue& queue);
+ 
+ }  // namespace internal
+diff --git a/src/binaryop/queue_binaryop_kernel_impl.h b/src/binaryop/queue_binaryop_kernel_impl.h
+index 814f371..0ef8a34 100644
+--- a/src/binaryop/queue_binaryop_kernel_impl.h
++++ b/src/binaryop/queue_binaryop_kernel_impl.h
+@@ -32,16 +32,17 @@ namespace internal {
+ template <typename T, typename Op, typename Index, int VectorWidth>
+ SNNStatus queue_binaryop(BaseMemObject<T const>& lhs,
+                          BaseMemObject<T const>& rhs, BaseMemObject<T>& output,
+-                         int32_t const n_items, cl::sycl::queue& queue) {
++                         const BinaryParams& params, cl::sycl::queue& queue) {
+   auto event = queue.submit([&](cl::sycl::handler& cgh) {
+     auto in1 = lhs.read_accessor(cgh);
+     auto in2 = rhs.read_accessor(cgh);
+     auto out = output.write_accessor(cgh);
++    auto x_range = static_cast<size_t>(params.lhs_items / params.rhs_items);
++    auto y_range = static_cast<size_t>(params.rhs_items);
+     BinaryOp<T, Op, Index, VectorWidth> binary_op{in1, in2, out};
+ 
+-    cgh.parallel_for(
+-        cl::sycl::range<1>{static_cast<size_t>(n_items / VectorWidth)},
+-        binary_op);
++    cgh.parallel_for(cl::sycl::range<2>{x_range, y_range / VectorWidth},
++                     binary_op);
+   });
+ 
+   return {event, StatusCode::OK};
+diff --git a/src/conv2d/direct/kernels_nchw.h b/src/conv2d/direct/kernels_nchw.h
+index 85d65c1..f9c8d3c 100644
+--- a/src/conv2d/direct/kernels_nchw.h
++++ b/src/conv2d/direct/kernels_nchw.h
+@@ -53,7 +53,7 @@ struct DirectConv2D<T, Index, conv_type::Forward, UseFastDiv, StaticWindow,
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+     const Index range = item.get_range().get(0);
+ 
+@@ -185,7 +185,7 @@ struct DirectConv2D<T, Index, conv_type::InputBackprop, UseFastDiv,
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+     const Index range = item.get_range().get(0);
+ 
+@@ -325,7 +325,7 @@ struct DirectConv2D<T, Index, conv_type::FilterBackprop, UseFastDiv, StaticOut,
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+     const Index range = item.get_range().get(0);
+ 
+diff --git a/src/conv2d/direct/kernels_nhwc.h b/src/conv2d/direct/kernels_nhwc.h
+index 468a2bc..2390c3c 100644
+--- a/src/conv2d/direct/kernels_nhwc.h
++++ b/src/conv2d/direct/kernels_nhwc.h
+@@ -59,7 +59,7 @@ struct DirectConv2D<T, Index, conv_type::Forward, UseFastDiv, StaticWindow,
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+     const Index range = item.get_range().get(0);
+ 
+@@ -202,7 +202,7 @@ struct DirectConv2D<T, Index, conv_type::InputBackprop, UseFastDiv,
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+     const Index range = item.get_range().get(0);
+ 
+@@ -352,7 +352,7 @@ struct DirectConv2D<T, Index, conv_type::FilterBackprop, UseFastDiv, StaticOut,
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  inline SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+     const Index range = item.get_range().get(0);
+ 
+diff --git a/src/conv2d/im2col/kernels/extract_filter_tiles.h b/src/conv2d/im2col/kernels/extract_filter_tiles.h
+index 29f4ae1..999e41c 100644
+--- a/src/conv2d/im2col/kernels/extract_filter_tiles.h
++++ b/src/conv2d/im2col/kernels/extract_filter_tiles.h
+@@ -48,7 +48,7 @@ struct ExtractFilterTiles {
+         input_accessor_{input},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+ 
+     if (index < n_items_) {
+diff --git a/src/conv2d/im2col/kernels/extract_input_tiles.h b/src/conv2d/im2col/kernels/extract_input_tiles.h
+index 20c9793..fbddc25 100644
+--- a/src/conv2d/im2col/kernels/extract_input_tiles.h
++++ b/src/conv2d/im2col/kernels/extract_input_tiles.h
+@@ -67,7 +67,7 @@ struct ExtractInputTiles<T, Index, VectorWidth, conv_type::Forward> {
+         input_accessor_{input},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<3> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<3> item) const {
+     Index const channel = item.get_id(0) * VectorWidth;
+     Index const col_idx = item.get_id(1);
+     Index row_idx;
+@@ -167,7 +167,7 @@ struct ExtractInputTiles<T, Index, VectorWidth, conv_type::InputBackprop> {
+         input_accessor_{input},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<3> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<3> item) const {
+     Index const feature = item.get_id(0) * VectorWidth;
+     Index const col_idx = item.get_id(1);
+     Index row_idx;
+@@ -260,7 +260,7 @@ struct ExtractInputTiles<T, Index, VectorWidth, conv_type::FilterBackprop> {
+         input_accessor_{input},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<3> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<3> item) const {
+     Index const channel = item.get_id(0);
+     Index const col_idx = item.get_id(1);
+     Index row_idx;
+diff --git a/src/conv2d/im2col/kernels/zero_out.h b/src/conv2d/im2col/kernels/zero_out.h
+index a17d562..c447b91 100644
+--- a/src/conv2d/im2col/kernels/zero_out.h
++++ b/src/conv2d/im2col/kernels/zero_out.h
+@@ -36,7 +36,7 @@ struct ZeroFunctor {
+   ZeroFunctor(size_t output_size, WriteAccessor<T> const& output)
+       : output_size_{output_size}, output_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     size_t const id = item.get_id(0) * VectorWidth;
+     if (id < output_size_) {
+       StoreType zeros{0};
+diff --git a/src/conv2d/tiled/kernels.h b/src/conv2d/tiled/kernels.h
+index 400ab14..6450404 100644
+--- a/src/conv2d/tiled/kernels.h
++++ b/src/conv2d/tiled/kernels.h
+@@ -95,7 +95,7 @@ struct TiledConv2D<T, Index, conv_type::Forward, OutTileRows, OutTileCols,
+         filter_accessor_{std::move(filter)},
+         output_accessor_{std::move(output)} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+ 
+     if (index < n_elems_) {
+@@ -146,7 +146,8 @@ struct TiledConv2D<T, Index, conv_type::Forward, OutTileRows, OutTileCols,
+ 
+  private:
+   void SNN_ALWAYS_INLINE convolve_tile(Input const& input, Filter const& filter,
+-                                       Output& output, int const row_idx) {
++                                       Output& output,
++                                       int const row_idx) const {
+     SNN_PRAGMA_UNROLL
+     for (int out_row = 0; out_row < OutTileRows; ++out_row) {
+       int const filter_row = row_idx - out_row * Stride;
+@@ -159,7 +160,7 @@ struct TiledConv2D<T, Index, conv_type::Forward, OutTileRows, OutTileCols,
+   void SNN_ALWAYS_INLINE convolve_one_row(Input const& input,
+                                           Filter const& filter, Output& output,
+                                           int const out_row,
+-                                          int const filter_row) {
++                                          int const filter_row) const {
+     int in_offset = 0;
+     SNN_PRAGMA_UNROLL
+     for (int out_col = 0; out_col < OutTileCols; ++out_col) {
+@@ -177,7 +178,7 @@ struct TiledConv2D<T, Index, conv_type::Forward, OutTileRows, OutTileCols,
+                                                   Filter const& filter,
+                                                   int const filter_row,
+                                                   int const filter_col,
+-                                                  OutVecType value) {
++                                                  OutVecType value) const {
+     SNN_PRAGMA_UNROLL
+     for (int i = 0; i < ChannelVectorWidth; i++) {
+       value =
+@@ -249,7 +250,7 @@ struct TiledConv2D<T, Index, conv_type::InputBackprop, OutTileRows, OutTileCols,
+         filter_accessor_{std::move(filter)},
+         output_accessor_{std::move(output)} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+ 
+     if (index < n_elems_) {
+@@ -305,7 +306,7 @@ struct TiledConv2D<T, Index, conv_type::InputBackprop, OutTileRows, OutTileCols,
+  private:
+   void SNN_ALWAYS_INLINE convolve_tile(Input const& input, Filter const& filter,
+                                        Output& output, int const row_idx,
+-                                       int const first_col) {
++                                       int const first_col) const {
+     SNN_PRAGMA_UNROLL
+     for (int out_row = 0; out_row < OutTileRows; ++out_row) {
+       int const filter_row = row_idx - out_row;
+@@ -317,7 +318,8 @@ struct TiledConv2D<T, Index, conv_type::InputBackprop, OutTileRows, OutTileCols,
+   void SNN_ALWAYS_INLINE convolve_one_row(Input const& input,
+                                           Filter const& filter, Output& output,
+                                           int const out_row,
+-                                          int const filter_row, int offset) {
++                                          int const filter_row,
++                                          int offset) const {
+     SNN_PRAGMA_UNROLL
+     for (int out_col = 0; out_col < OutTileCols; ++out_col) {
+       auto padded_out = out_col - offset;
+@@ -343,11 +345,9 @@ struct TiledConv2D<T, Index, conv_type::InputBackprop, OutTileRows, OutTileCols,
+       }
+     }
+   }
+-  OutVecType SNN_ALWAYS_INLINE inputbackprop_accumulate(InVecType input,
+-                                                        Filter const& filter,
+-                                                        int const filter_row,
+-                                                        int const filter_col,
+-                                                        OutVecType value) {
++  OutVecType SNN_ALWAYS_INLINE inputbackprop_accumulate(
++      InVecType input, Filter const& filter, int const filter_row,
++      int const filter_col, OutVecType value) const {
+     SNN_PRAGMA_UNROLL
+     for (int i = 0; i < FeatureVectorWidth; ++i) {
+       OutVecType filter_slice =
+@@ -360,7 +360,7 @@ struct TiledConv2D<T, Index, conv_type::InputBackprop, OutTileRows, OutTileCols,
+   }
+   OutVecType SNN_ALWAYS_INLINE slice_transpose(Filter const& filter,
+                                                int filter_row, int filter_col,
+-                                               int index) {
++                                               int index) const {
+     OutVecType output;
+     SNN_PRAGMA_UNROLL
+     for (int i = 0; i < ChannelVectorWidth; ++i) {
+diff --git a/src/conv2d/winograd/kernels/extract_filter_transform.h b/src/conv2d/winograd/kernels/extract_filter_transform.h
+index c79c80d..d198f60 100644
+--- a/src/conv2d/winograd/kernels/extract_filter_transform.h
++++ b/src/conv2d/winograd/kernels/extract_filter_transform.h
+@@ -42,7 +42,7 @@ struct ExtractFilterTiles {
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+     if (index < n_tiles_) {
+       auto filter_data = filter_accessor_.get_pointer();
+@@ -91,7 +91,7 @@ struct ExtractFilterTiles<T, Index, M, N, R, S, conv_type::InputBackprop> {
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+     if (index < n_tiles_) {
+       auto filter_data = filter_accessor_.get_pointer();
+@@ -139,7 +139,7 @@ struct ExtractFilterTiles<T, Index, M, N, R, S, conv_type::FilterBackprop> {
+         filter_accessor_{std::move(filter)},
+         output_accessor_{std::move(output)} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+     if (index < n_threads_) {
+       auto filter_data = filter_accessor_.get_pointer();
+diff --git a/src/conv2d/winograd/kernels/extract_input_transform.h b/src/conv2d/winograd/kernels/extract_input_transform.h
+index 82d9d38..13954d2 100644
+--- a/src/conv2d/winograd/kernels/extract_input_transform.h
++++ b/src/conv2d/winograd/kernels/extract_input_transform.h
+@@ -55,7 +55,7 @@ struct ExtractInputTiles {
+         input_accessor_{input},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+     if (index < n_elems_) {
+       auto input_data = input_accessor_.get_pointer();
+@@ -123,7 +123,7 @@ struct ExtractInputTiles<T, Index, ChannelVector, M, N, R, S,
+         input_accessor_{input},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+     if (index < n_elems_) {
+       auto input_data = input_accessor_.get_pointer();
+diff --git a/src/conv2d/winograd/kernels/extract_output_transform.h b/src/conv2d/winograd/kernels/extract_output_transform.h
+index 1a5cf71..5dbc430 100644
+--- a/src/conv2d/winograd/kernels/extract_output_transform.h
++++ b/src/conv2d/winograd/kernels/extract_output_transform.h
+@@ -48,7 +48,7 @@ struct ExtractOutputTiles {
+         input_accessor_{input},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+     if (index < n_threads_) {
+       auto input_data = input_accessor_.get_pointer();
+@@ -113,7 +113,7 @@ struct ExtractOutputTiles<T, Index, M, N, R, S, conv_type::FilterBackprop,
+         input_accessor_{input},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+     if (index < n_threads_) {
+       auto input_data = input_accessor_.get_pointer();
+diff --git a/src/depthwise_conv2d/kernels.h b/src/depthwise_conv2d/kernels.h
+index c0ad800..09a9b5e 100644
+--- a/src/depthwise_conv2d/kernels.h
++++ b/src/depthwise_conv2d/kernels.h
+@@ -53,7 +53,7 @@ struct DepthwiseConv2D<T, Index, conv2d::conv_type::Forward, VectorWidth> {
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     const Index index = item.get_id(0);
+ 
+     if (index < n_elems_) {
+@@ -149,7 +149,7 @@ struct DepthwiseConv2D<T, Index, conv2d::conv_type::InputBackprop,
+         filter_accessor_{filter},
+         output_accessor_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const index = item.get_id(0);
+ 
+     if (index < n_elems_) {
+@@ -253,7 +253,7 @@ struct DepthwiseConv2D<T, Index, conv2d::conv_type::FilterBackprop,
+         workspace_{local},
+         filter_output_{output} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::nd_item<2> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::nd_item<2> item) const {
+     Index const local_idx = item.get_global_id(0);
+     Index const fil_idx = item.get_global_id(1);
+ 
+diff --git a/src/helpers/vector_io.h b/src/helpers/vector_io.h
+index 2f4e518..a5823ac 100644
+--- a/src/helpers/vector_io.h
++++ b/src/helpers/vector_io.h
+@@ -59,12 +59,11 @@ cl::sycl::multi_ptr<T const, Space> as_const_ptr(
+  * type.
+  */
+ namespace io {
+-
+ /**
+- * Identifier function to mark an index as a vector index, rather than a scalar
+- * index. When used in a Load or Store operation these will use strides of
+- * vector size, rather than strides of scalar size to compute offsets from the
+- * given pointer.
++ * Identifier function to mark an index as a vector index, rather than a
++ * scalar index. When used in a Load or Store operation these will use strides
++ * of vector size, rather than strides of scalar size to compute offsets from
++ * the given pointer.
+  */
+ template <typename Index>
+ internal::AsVecIndex<Index> as_vec_index(Index val) {
+diff --git a/src/matmul/CMakeLists.txt b/src/matmul/CMakeLists.txt
+index 2ab7b10..cbcae14 100644
+--- a/src/matmul/CMakeLists.txt
++++ b/src/matmul/CMakeLists.txt
+@@ -49,6 +49,31 @@ function(generate_matmul_kernels)
+       foreach(TRANS_LHS IN LISTS _bool_list)
+         foreach(TRANS_RHS IN LISTS _bool_list)
+           generate_matmul_impl(_sources 4 4 4)
++          # AMD
++          generate_matmul_impl(_sources 1 8 1)
++          generate_matmul_impl(_sources 1 8 2)
++          generate_matmul_impl(_sources 1 8 4)
++          generate_matmul_impl(_sources 2 4 4)
++          generate_matmul_impl(_sources 2 8 4)
++          generate_matmul_impl(_sources 4 8 4)
++          # Intel CPU
++          generate_matmul_impl(_sources 4 1 1)
++          generate_matmul_impl(_sources 4 1 8)
++          generate_matmul_impl(_sources 8 1 1)
++          generate_matmul_impl(_sources 8 4 8)
++          # Intel GPU
++          generate_matmul_impl(_sources 4 1 4)
++          generate_matmul_impl(_sources 4 2 4)
++          generate_matmul_impl(_sources 4 2 8)
++          generate_matmul_impl(_sources 4 4 8)
++          generate_matmul_impl(_sources 8 2 8)
++          generate_matmul_impl(_sources 8 4 4)
++          # ARM
++          generate_matmul_impl(_sources 2 4 2)
++          generate_matmul_impl(_sources 2 4 4)
++          generate_matmul_impl(_sources 4 1 2)
++          generate_matmul_impl(_sources 4 2 2)
++          generate_matmul_impl(_sources 4 2 4)
+         endforeach()
+       endforeach()
+     endforeach()
+diff --git a/src/matmul/kernels.h b/src/matmul/kernels.h
+index b5b4157..bf78298 100644
+--- a/src/matmul/kernels.h
++++ b/src/matmul/kernels.h
+@@ -39,7 +39,7 @@ struct MatmulKernel {
+         n_{n},
+         beta_{beta} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::nd_item<3> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::nd_item<3> item) const {
+     Index batch = item.get_global_id(0);
+     Index row = item.get_global_id(1) * RowTile;
+     Index col = item.get_global_id(2) * ColTile;
+diff --git a/src/matmul/launch.cc b/src/matmul/launch.cc
+index 4fd471b..e619587 100644
+--- a/src/matmul/launch.cc
++++ b/src/matmul/launch.cc
+@@ -40,6 +40,444 @@ SNNStatus launch_with_tiles(BaseMemObject<T const>& lhs,
+   return kernel(lhs, rhs, output, batches, m, k, n, beta, queue, wg_rows,
+                 wg_cols, wg_batch);
+ }
++template <typename T, bool TransposeLHS, bool TransposeRHS>
++SNNStatus launch_for_intelgpu(BaseMemObject<T const>& lhs,
++                              BaseMemObject<T const>& rhs,
++                              BaseMemObject<T>& output, int batches, int m,
++                              int k, int n, T beta, cl::sycl::queue& queue) {
++#define LAUNCH(RT, AT, CT, WR, WC, WB)                          \
++  launch_with_tiles<T, TransposeLHS, TransposeRHS, RT, AT, CT>( \
++      lhs, rhs, output, batches, m, k, n, beta, queue, WR, WC, WB);
++  if (n % 8 <= 3.5) {
++    if (k * n <= 6322176) {
++      if (k * n <= 107648) {
++        if (n <= 56.5) {
++          if ((float)n / k <= 0.05517578125) {
++            if (k * n <= 12533.5) {
++              return LAUNCH(4, 2, 8, 8, 8, 1);
++            } else {
++              return LAUNCH(4, 4, 8, 1, 64, 1);
++            }
++          } else {
++            return LAUNCH(4, 1, 4, 1, 64, 1);
++          }
++        } else {
++          if (k <= 114) {
++            if (batches * m * n <= 6889472) {
++              return LAUNCH(4, 4, 8, 1, 64, 1);
++            } else {
++              return LAUNCH(4, 4, 8, 16, 8, 1);
++            }
++          } else {
++            if ((float)m / k <= 0.5765306055545807) {
++              return LAUNCH(4, 4, 8, 1, 64, 1);
++            } else {
++              return LAUNCH(8, 4, 4, 8, 16, 1);
++            }
++          }
++        }
++      } else {
++        if (batches * m * n <= 466944) {
++          if (batches * m * n <= 43520) {
++            if ((float)m / k <= 0.09637188166379929) {
++              return LAUNCH(4, 4, 8, 1, 64, 1);
++            } else {
++              return LAUNCH(4, 1, 4, 1, 64, 1);
++            }
++          } else {
++            if (k <= 2720) {
++              return LAUNCH(4, 4, 8, 1, 64, 1);
++            } else {
++              return LAUNCH(4, 2, 4, 8, 16, 1);
++            }
++          }
++        } else {
++          if (k * m <= 3072) {
++            if (k * m <= 1888) {
++              return LAUNCH(4, 4, 8, 16, 8, 1);
++            } else {
++              return LAUNCH(4, 2, 8, 8, 8, 1);
++            }
++          } else {
++            return LAUNCH(4, 4, 8, 1, 64, 1);
++          }
++        }
++      }
++    } else {
++      if (m <= 33.5) {
++        return LAUNCH(8, 4, 4, 8, 16, 1);
++      } else {
++        if (batches * m * n <= 55296) {
++          if (n % 8 <= 1.5) {
++            return LAUNCH(4, 2, 8, 8, 8, 1);
++          } else {
++            return LAUNCH(4, 4, 8, 1, 64, 1);
++          }
++        } else {
++          if (k % 2 <= 0.5) {
++            if ((float)m * n / k <= 2.204081654548645) {
++              return LAUNCH(4, 4, 8, 1, 64, 1);
++            } else {
++              return LAUNCH(4, 2, 4, 8, 16, 1);
++            }
++          } else {
++            return LAUNCH(4, 4, 8, 1, 64, 1);
++          }
++        }
++      }
++    }
++  } else {
++    if ((float)m / k <= 0.05603387230075896) {
++      return LAUNCH(8, 4, 4, 8, 16, 1);
++    } else {
++      if ((float)m * n / k <= 12.88888931274414) {
++        return LAUNCH(4, 1, 4, 1, 64, 1);
++      } else {
++        return LAUNCH(4, 2, 8, 8, 8, 1);
++      }
++    }
++  }
++#undef LAUNCH
++}
++template <typename T, bool TransposeLHS, bool TransposeRHS>
++SNNStatus launch_for_intelcpu(BaseMemObject<T const>& lhs,
++                              BaseMemObject<T const>& rhs,
++                              BaseMemObject<T>& output, int batch, int m, int k,
++                              int n, T beta, cl::sycl::queue& queue) {
++#define LAUNCH(RT, AT, CT, WR, WC, WB)                          \
++  launch_with_tiles<T, TransposeLHS, TransposeRHS, RT, AT, CT>( \
++      lhs, rhs, output, batch, m, k, n, beta, queue, WR, WC, WB);
++  if (k <= 82) {
++    if (m % 8 <= 1.5) {
++      if (k * n <= 8800) {
++        if (batch * m * n <= 2916352) {
++          return LAUNCH(8, 4, 8, 1, 128, 1);
++        } else {
++          return LAUNCH(4, 1, 1, 1, 64, 1);
++        }
++      } else {
++        if ((float)m * n / k <= 773082.09375) {
++          if (n % 8 <= 0.5) {
++            return LAUNCH(4, 1, 8, 8, 16, 1);
++          } else {
++            if (m * n <= 985680) {
++              return LAUNCH(8, 4, 8, 1, 128, 1);
++            } else {
++              return LAUNCH(4, 1, 8, 8, 16, 1);
++            }
++          }
++        } else {
++          return LAUNCH(4, 1, 1, 1, 64, 1);
++        }
++      }
++    } else {
++      return LAUNCH(4, 1, 1, 1, 64, 1);
++    }
++  } else {
++    if (batch * m * n <= 861184) {
++      if ((float)m / k <= 0.03148849494755268) {
++        if (batch * m * n <= 139264) {
++          if (m * n <= 1888) {
++            if ((float)m * n / k <= 0.006179932039231062) {
++              return LAUNCH(8, 4, 8, 1, 128, 1);
++            } else {
++              return LAUNCH(4, 1, 1, 1, 64, 1);
++            }
++          } else {
++            if (k * n <= 1522816) {
++              return LAUNCH(8, 4, 8, 128, 1, 1);
++            } else {
++              return LAUNCH(4, 1, 1, 1, 64, 1);
++            }
++          }
++        } else {
++          return LAUNCH(4, 1, 1, 1, 64, 1);
++        }
++      } else {
++        if (n <= 544) {
++          if (k * n <= 39488) {
++            if (n % 8 <= 0.5) {
++              return LAUNCH(8, 4, 8, 64, 1, 1);
++            } else {
++              return LAUNCH(8, 4, 8, 1, 128, 1);
++            }
++          } else {
++            return LAUNCH(8, 4, 8, 128, 1, 1);
++          }
++        } else {
++          if ((float)n / k <= 17.01388931274414) {
++            if (k * m <= 231424) {
++              return LAUNCH(8, 1, 1, 1, 64, 1);
++            } else {
++              return LAUNCH(8, 4, 8, 16, 8, 1);
++            }
++          } else {
++            if (k % 4 <= 1.5) {
++              return LAUNCH(8, 4, 8, 64, 1, 1);
++            } else {
++              return LAUNCH(8, 4, 8, 8, 8, 1);
++            }
++          }
++        }
++      }
++    } else {
++      if (batch * m * n <= 2785280) {
++        if (k <= 1874) {
++          if ((float)m / k <= 0.8545706272125244) {
++            if ((float)n / k <= 0.35467155277729034) {
++              return LAUNCH(8, 4, 8, 64, 1, 1);
++            } else {
++              return LAUNCH(8, 4, 8, 8, 8, 1);
++            }
++          } else {
++            if (k * n <= 18816) {
++              return LAUNCH(8, 4, 8, 1, 128, 1);
++            } else {
++              return LAUNCH(8, 4, 8, 64, 1, 1);
++            }
++          }
++        } else {
++          if ((float)m / k <= 0.13718820735812187) {
++            return LAUNCH(8, 4, 8, 16, 8, 1);
++          } else {
++            if (k * m <= 1392640) {
++              return LAUNCH(8, 4, 8, 16, 8, 1);
++            } else {
++              return LAUNCH(8, 1, 1, 1, 64, 1);
++            }
++          }
++        }
++      } else {
++        if ((float)n / k <= 18.375) {
++          if (batch * m * n <= 3244032) {
++            if ((float)m * n / k <= 1088.888916015625) {
++              return LAUNCH(8, 1, 1, 1, 64, 1);
++            } else {
++              return LAUNCH(8, 4, 8, 8, 8, 1);
++            }
++          } else {
++            return LAUNCH(8, 4, 8, 8, 8, 1);
++          }
++        } else {
++          if ((float)n / k <= 92.55555725097656) {
++            return LAUNCH(8, 4, 8, 64, 1, 1);
++          } else {
++            if (m * n <= 8028160) {
++              return LAUNCH(8, 4, 8, 8, 8, 1);
++            } else {
++              return LAUNCH(4, 1, 1, 1, 64, 1);
++            }
++          }
++        }
++      }
++    }
++  }
++
++#undef LAUNCH
++}
++template <typename T, bool TransposeLHS, bool TransposeRHS>
++SNNStatus launch_for_amd(BaseMemObject<T const>& lhs,
++                         BaseMemObject<T const>& rhs, BaseMemObject<T>& output,
++                         int batch, int m, int k, int n, T beta,
++                         cl::sycl::queue& queue) {
++#define LAUNCH(RT, AT, CT, WR, WC, WB)                          \
++  launch_with_tiles<T, TransposeLHS, TransposeRHS, RT, AT, CT>( \
++      lhs, rhs, output, batch, m, k, n, beta, queue, WR, WC, WB);
++
++  if (batch * m * n <= 243968) {
++    if (batch * m * n <= 34816) {
++      if (n % 4 <= 0.5) {
++        if (k * n <= 75264) {
++          return LAUNCH(1, 8, 4, 8, 8, 1);
++        } else {
++          return LAUNCH(4, 8, 4, 8, 32, 1);
++        }
++      } else {
++        if ((float)m / k <= 0.0004840877518290654) {
++          return LAUNCH(4, 8, 4, 8, 32, 1);
++        } else {
++          return LAUNCH(1, 8, 4, 8, 8, 1);
++        }
++      }
++    } else {
++      if (batch * m * n <= 69632) {
++        if (k * n <= 18816) {
++          return LAUNCH(1, 8, 4, 8, 8, 1);
++        } else {
++          if (m <= 768) {
++            return LAUNCH(4, 8, 4, 8, 32, 1);
++          } else {
++            if (k * m <= 1572864) {
++              return LAUNCH(4, 8, 4, 8, 32, 1);
++            } else {
++              return LAUNCH(1, 8, 4, 8, 8, 1);
++            }
++          }
++        }
++      } else {
++        if (n <= 32.5) {
++          return LAUNCH(1, 8, 4, 8, 8, 1);
++        } else {
++          if (k * n <= 71296) {
++            if (m * n <= 165888) {
++              return LAUNCH(4, 8, 4, 8, 32, 1);
++            } else {
++              return LAUNCH(1, 8, 2, 16, 16, 1);
++            }
++          } else {
++            if (batch * m * n <= 139264) {
++              return LAUNCH(1, 8, 2, 16, 16, 1);
++            } else {
++              return LAUNCH(4, 8, 4, 8, 32, 1);
++            }
++          }
++        }
++      }
++    }
++  } else {
++    if ((float)m / k <= 4.559999942779541) {
++      if (k * m <= 6144) {
++        if (m <= 17.5) {
++          return LAUNCH(4, 8, 4, 8, 32, 1);
++        } else {
++          if (batch * m * n <= 1591360) {
++            if ((float)n / k <= 7.65625) {
++              return LAUNCH(4, 8, 4, 8, 32, 1);
++            } else {
++              return LAUNCH(1, 8, 1, 16, 16, 1);
++            }
++          } else {
++            if (batch * m * n <= 10035200) {
++              return LAUNCH(2, 8, 4, 16, 16, 1);
++            } else {
++              return LAUNCH(4, 8, 4, 8, 32, 1);
++            }
++          }
++        }
++      } else {
++        if (n <= 96) {
++          if (n <= 56.5) {
++            return LAUNCH(4, 8, 4, 8, 32, 1);
++          } else {
++            return LAUNCH(1, 8, 2, 16, 16, 1);
++          }
++        } else {
++          if (batch * m * n <= 278528) {
++            if ((float)m / k <= 0.48979590833187103) {
++              return LAUNCH(2, 8, 4, 16, 16, 1);
++            } else {
++              return LAUNCH(2, 4, 4, 8, 32, 1);
++            }
++          } else {
++            return LAUNCH(2, 8, 4, 16, 16, 1);
++          }
++        }
++      }
++    } else {
++      if (batch * m * n <= 1867776) {
++        if (k * m <= 37632) {
++          return LAUNCH(1, 8, 1, 16, 16, 1);
++        } else {
++          if ((float)m * n / k <= 4012.4080810546875) {
++            return LAUNCH(1, 8, 1, 16, 16, 1);
++          } else {
++            if (k * n <= 37632) {
++              return LAUNCH(1, 8, 1, 16, 16, 1);
++            } else {
++              return LAUNCH(4, 8, 4, 8, 32, 1);
++            }
++          }
++        }
++      } else {
++        if (k * n <= 213248) {
++          return LAUNCH(4, 8, 4, 8, 32, 1);
++        } else {
++          return LAUNCH(1, 8, 1, 16, 16, 1);
++        }
++      }
++    }
++  }
++#undef LAUNCH
++}
++template <typename T, bool TransposeLHS, bool TransposeRHS>
++SNNStatus launch_for_arm(BaseMemObject<T const>& lhs,
++                         BaseMemObject<T const>& rhs, BaseMemObject<T>& output,
++                         int batch, int m, int k, int n, T beta,
++                         cl::sycl::queue& queue) {
++#define LAUNCH(RT, AT, CT, WR, WC, WB)                          \
++  launch_with_tiles<T, TransposeLHS, TransposeRHS, RT, AT, CT>( \
++      lhs, rhs, output, batch, m, k, n, beta, queue, WR, WC, WB);
++  if ((float)m / k <= 0.27437641471624374) {
++    if (m * n <= 12896) {
++      if (batch * m * n <= 83968) {
++        return LAUNCH(2, 4, 2, 8, 32, 1);
++      } else {
++        if ((float)m / k <= 0.06775882840156555) {
++          return LAUNCH(4, 2, 4, 8, 16, 1);
++        } else {
++          return LAUNCH(2, 4, 2, 8, 32, 1);
++        }
++      }
++    } else {
++      if ((float)n / k <= 4.083333492279053) {
++        if (k * m <= 4816896) {
++          return LAUNCH(4, 2, 2, 1, 64, 1);
++        } else {
++          if (m * n <= 110592) {
++            return LAUNCH(2, 4, 2, 8, 32, 1);
++          } else {
++            return LAUNCH(4, 2, 2, 1, 64, 1);
++          }
++        }
++      } else {
++        if (k * m <= 19296) {
++          if (k * n <= 72253440) {
++            if (m * n <= 94080) {
++              return LAUNCH(4, 2, 4, 8, 16, 1);
++            } else {
++              return LAUNCH(4, 2, 2, 1, 64, 1);
++            }
++          } else {
++            return LAUNCH(4, 2, 4, 8, 16, 1);
++          }
++        } else {
++          return LAUNCH(2, 4, 2, 8, 32, 1);
++        }
++      }
++    }
++  } else {
++    if (k * m <= 960) {
++      return LAUNCH(4, 2, 4, 8, 16, 1);
++    } else {
++      if ((float)n / k <= 0.1103515625) {
++        if ((float)n / k <= 0.0634765625) {
++          return LAUNCH(4, 2, 4, 1, 128, 1);
++        } else {
++          return LAUNCH(4, 2, 4, 8, 16, 1);
++        }
++      } else {
++        if (k * m <= 331776) {
++          if (k * n <= 602112) {
++            return LAUNCH(4, 2, 4, 1, 128, 1);
++          } else {
++            if ((float)n / k <= 147) {
++              return LAUNCH(2, 4, 2, 8, 32, 1);
++            } else {
++              return LAUNCH(4, 2, 4, 1, 128, 1);
++            }
++          }
++        } else {
++          if (k * n <= 2709504) {
++            return LAUNCH(4, 2, 2, 1, 64, 1);
++          } else {
++            return LAUNCH(2, 4, 2, 8, 32, 1);
++          }
++        }
++      }
++    }
++  }
++#undef LAUNCH
++}
+ 
+ }  // namespace
+ 
+@@ -48,6 +486,25 @@ template <typename T, bool TransposeLHS, bool TransposeRHS>
+ SNNStatus launch(BaseMemObject<T const>& lhs, BaseMemObject<T const>& rhs,
+                  BaseMemObject<T>& output, int batches, int m, int k, int n,
+                  T beta, cl::sycl::queue& queue) {
++  auto device_name =
++      queue.get_device().get_info<cl::sycl::info::device::name>();
++  if (device_name.find("Fiji") != std::string::npos) {
++    return launch_for_amd<T, TransposeLHS, TransposeRHS>(
++        lhs, rhs, output, batches, m, k, n, beta, queue);
++  }
++  if (device_name.find("Intel(R) Gen9 HD Graphics NEO") != std::string::npos) {
++    return launch_for_intelgpu<T, TransposeLHS, TransposeRHS>(
++        lhs, rhs, output, batches, m, k, n, beta, queue);
++  }
++  if (device_name.find("Intel(R) Core(TM) i7-6700K CPU @ 4.00GHz") !=
++      std::string::npos) {
++    return launch_for_intelcpu<T, TransposeLHS, TransposeRHS>(
++        lhs, rhs, output, batches, m, k, n, beta, queue);
++  }
++  if (device_name.find("Mali-G71") != std::string::npos) {
++    return launch_for_arm<T, TransposeLHS, TransposeRHS>(
++        lhs, rhs, output, batches, m, k, n, beta, queue);
++  }
+   return launch_with_tiles<T, TransposeLHS, TransposeRHS, 4, 4, 4>(
+       lhs, rhs, output, batches, m, k, n, beta, queue, 8, 4, 1);
+ }
+diff --git a/src/pointwise/kernels.h b/src/pointwise/kernels.h
+index 69d7ecf..a808b01 100644
+--- a/src/pointwise/kernels.h
++++ b/src/pointwise/kernels.h
+@@ -178,7 +178,7 @@ class PointwiseOp<T, Index, Op, Forward, VectorWidth> {
+               WriteAccessor<T> const& output, Index const num_items)
+       : input_{input}, output_{output}, n_items_{num_items} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const idx = item.get_id(0);
+ 
+     if (idx < n_items_) {
+@@ -216,7 +216,7 @@ class PointwiseOp<T, Index, Op, Gradient, VectorWidth> {
+         output_backprop_{output_backprop},
+         n_items_{num_items} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index const idx = item.get_id(0);
+ 
+     if (idx < n_items_) {
+diff --git a/src/pointwise/launch_pointwise_grad.cc b/src/pointwise/launch_pointwise_grad.cc
+index 0ead342..77b405d 100644
+--- a/src/pointwise/launch_pointwise_grad.cc
++++ b/src/pointwise/launch_pointwise_grad.cc
+@@ -83,14 +83,12 @@ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(float, Relu)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(float, Tanh)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(float, Exp)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(float, Log)
+-SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(float, Floor)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(float, Sqrt)
+ #ifdef SNN_USE_HALF
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(cl::sycl::half, Relu)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(cl::sycl::half, Tanh)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(cl::sycl::half, Exp)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(cl::sycl::half, Log)
+-SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(cl::sycl::half, Floor)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(cl::sycl::half, Sqrt)
+ #endif  // SNN_USE_HALF
+ #ifdef SNN_USE_DOUBLE
+@@ -98,7 +96,6 @@ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(double, Relu)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(double, Tanh)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(double, Exp)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(double, Log)
+-SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(double, Floor)
+ SNN_INSTANTIATE_LAUNCH_POINTWISE_GRADIENT_KERNEL(double, Sqrt)
+ #endif  // SNN_USE_DOUBLE
+ 
+diff --git a/src/pooling/kernels.h b/src/pooling/kernels.h
+index e63a881..5ed34d7 100644
+--- a/src/pooling/kernels.h
++++ b/src/pooling/kernels.h
+@@ -55,7 +55,7 @@ class PoolingOp<T, Index, Op, Forward, VectorWidth, UseFastDiv> {
+   const IndexDivType div_channels_;
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+ 
+     if (index < n_items_) {
+@@ -135,7 +135,7 @@ class PoolingOp<T, Index, MaxOp, Backpropagate, VectorWidth, UseFastDiv> {
+         div_in_cols_{pp.in_cols},
+         div_channels_{pp.channels} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+ 
+     if (index < n_items_) {
+@@ -250,7 +250,8 @@ class PoolingOp<T, Index, MaxOp, Backpropagate, VectorWidth, UseFastDiv> {
+ 
+   /** Get the input window corresponding to the given index.  */
+   Window SNN_ALWAYS_INLINE get_input_window(Index idx, Index max_idx,
+-                                            Index window_size, Index stride) {
++                                            Index window_size,
++                                            Index stride) const {
+     Index const begin =
+         (idx < window_size) ? 0 : (idx - window_size) / stride + 1;
+     Index const end = helpers::min(idx / stride + 1, max_idx);
+@@ -260,7 +261,7 @@ class PoolingOp<T, Index, MaxOp, Backpropagate, VectorWidth, UseFastDiv> {
+   /** Get the output window corresponding to the given index.  */
+   Window SNN_ALWAYS_INLINE get_output_window(Index idx, Index max_idx,
+                                              Index window_size, Index stride,
+-                                             Index pad) {
++                                             Index pad) const {
+     Index begin = idx * stride - pad;
+     Index end = helpers::min(begin + window_size, max_idx);
+     begin = helpers::max(begin, 0);
+@@ -302,7 +303,7 @@ class PoolingOp<T, Index, Average, Backpropagate, VectorWidth, UseFastDiv> {
+         div_in_cols_{pp.in_cols},
+         div_channels_{pp.channels / VectorWidth} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index index = item.get_id(0);
+ 
+     if (index < n_items_) {
+@@ -368,7 +369,8 @@ class PoolingOp<T, Index, Average, Backpropagate, VectorWidth, UseFastDiv> {
+    */
+   Index SNN_ALWAYS_INLINE get_actual_window_size(Index idx, Index max_idx,
+                                                  Index window_size,
+-                                                 Index stride, Index pad) {
++                                                 Index stride,
++                                                 Index pad) const {
+     Index start = idx * stride - pad;
+     Index const end = helpers::min(start + window_size, max_idx);
+     start = helpers::max(start, 0);
+@@ -389,7 +391,7 @@ class PoolingOp<T, Index, Average, Backpropagate, VectorWidth, UseFastDiv> {
+    */
+   InputWindow SNN_ALWAYS_INLINE get_input_window(Index idx, Index max_idx,
+                                                  Index window_size,
+-                                                 Index stride) {
++                                                 Index stride) const {
+     Index const begin =
+         (idx < window_size) ? 0 : (idx - window_size) / stride + 1;
+     Index const end = helpers::min(idx / stride + 1, max_idx);
+diff --git a/src/reduce/kernels.h b/src/reduce/kernels.h
+index 7e6fc19..9c59917 100644
+--- a/src/reduce/kernels.h
++++ b/src/reduce/kernels.h
+@@ -66,7 +66,7 @@ struct ReduceKernel {
+         outer_{outer},
+         inner_{inner} {}
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<2> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<2> item) const {
+     Index batch = item.get_id(0);
+     Index inner = item.get_id(1);
+ 
+diff --git a/src/roi_align/kernels.h b/src/roi_align/kernels.h
+index 2bbc2ef..195e199 100644
+--- a/src/roi_align/kernels.h
++++ b/src/roi_align/kernels.h
+@@ -63,7 +63,7 @@ class RoiAlignOp {
+   size_t const n_threads_;
+ 
+   SNN_ALWAYS_INLINE T interpolate_bilinear(T const* in_ptr, Index height,
+-                                           Index width, T y, T x) {
++                                           Index width, T y, T x) const {
+     if (y < T(-1) || y > static_cast<T>(height) || x < T(-1) ||
+         x > static_cast<T>(width)) {
+       return T(0);
+@@ -105,7 +105,7 @@ class RoiAlignOp {
+   }
+ 
+  public:
+-  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) {
++  SNN_ALWAYS_INLINE void operator()(cl::sycl::item<1> item) const {
+     T const* in_ptr = in_data_.get_pointer();
+     T const* roi_ptr = roi_data_.get_pointer();
+     BatchIndicesT const* batch_indices_ptr = batch_indices_data_.get_pointer();
+diff --git a/src/transpose/kernels.h b/src/transpose/kernels.h
+index 2729922..1ed50db 100644
+--- a/src/transpose/kernels.h
++++ b/src/transpose/kernels.h
+@@ -49,7 +49,7 @@ struct TransposeKernel {
+     }
+   };
+ 
+-  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) {
++  void SNN_ALWAYS_INLINE operator()(cl::sycl::item<1> item) const {
+     Index flat_in_id = item.get_id(0);
+     if (flat_in_id < tensor_size_) {
+       auto in_ptr = input_.get_pointer();
+diff --git a/test/helpers/workgroup_reduce.cc b/test/helpers/workgroup_reduce.cc
+index 4ee4fa8..a2bb906 100644
+--- a/test/helpers/workgroup_reduce.cc
++++ b/test/helpers/workgroup_reduce.cc
+@@ -64,7 +64,7 @@ struct Reducer {
+   using Load = sycldnn::helpers::io::Load<VecType>;
+   using Store = sycldnn::helpers::io::Store<VecType>;
+ 
+-  void operator()(cl::sycl::nd_item<Dims> item) {
++  void operator()(cl::sycl::nd_item<Dims> item) const {
+     size_t lin_idx = sycldnn::helpers::get_flattened_global_id(item) * Width;
+     if (lin_idx < data_size) {
+       auto input_ptr =

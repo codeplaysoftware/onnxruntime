@@ -1,0 +1,1075 @@
+diff --git a/cmake/CMakeLists.txt b/cmake/CMakeLists.txt
+index e0b302443..701a23425 100644
+--- a/cmake/CMakeLists.txt
++++ b/cmake/CMakeLists.txt
+@@ -1166,7 +1166,9 @@ function(onnxruntime_set_compile_flags target_name)
+             #external/protobuf/src/google/protobuf/arena.h:445:18: error: unused parameter 'p'
+             target_compile_options(${target_name} PRIVATE "-Wno-unused-parameter")
+           endif()
+-          target_compile_options(${target_name} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:SHELL:--compiler-options -Werror>" "$<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:-Werror>")
++          if(NOT is_dpcpp)
++            target_compile_options(${target_name} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:SHELL:--compiler-options -Werror>" "$<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:-Werror>")
++          endif()
+       endif()
+ 
+       target_compile_definitions(${target_name} PUBLIC -DNSYNC_ATOMIC_CPP11)
+@@ -1429,6 +1431,9 @@ endif()
+ if (Flatbuffers_FOUND)
+   add_library(flatbuffers ALIAS flatbuffers::flatbuffers)
+ else()
++  if(is_dpcpp)
++    string(APPEND CMAKE_CXX_FLAGS " -Wno-error=unused-but-set-variable ")
++  endif()
+   add_subdirectory(external/flatbuffers EXCLUDE_FROM_ALL)
+ endif()
+ set_msvc_c_cpp_compiler_warning_level(3)
+diff --git a/cmake/external/FindDPCPP.cmake b/cmake/external/FindDPCPP.cmake
+index fc8ecbc9c..2e258c143 100644
+--- a/cmake/external/FindDPCPP.cmake
++++ b/cmake/external/FindDPCPP.cmake
+@@ -33,13 +33,13 @@ add_library(DPCPP::DPCPP INTERFACE IMPORTED)
+ 
+ if(UNIX)
+   set_target_properties(DPCPP::DPCPP PROPERTIES
+-    INTERFACE_COMPILE_OPTIONS "-fsycl;-fsycl-targets=${DPCPP_SYCL_TARGET}"
+-    INTERFACE_LINK_OPTIONS "-fsycl;-fsycl-targets=${DPCPP_SYCL_TARGET}"
++    INTERFACE_COMPILE_OPTIONS  $<$<COMPILE_LANGUAGE:CXX>:-fsycl> $<$<COMPILE_LANGUAGE:CXX>:-fsycl-targets=${DPCPP_SYCL_TARGET}>
++    INTERFACE_LINK_OPTIONS  $<$<COMPILE_LANGUAGE:CXX>:-fsycl> $<$<COMPILE_LANGUAGE:CXX>:-fsycl-targets=${DPCPP_SYCL_TARGET}>
+     INTERFACE_LINK_LIBRARIES ${DPCPP_LIB_DIR}
+     INTERFACE_INCLUDE_DIRECTORIES "${DPCPP_BIN_DIR}/../include/sycl")
+ else()
+   set_target_properties(DPCPP::DPCPP PROPERTIES
+-    INTERFACE_COMPILE_OPTIONS "-fsycl;-fsycl-targets=${DPCPP_SYCL_TARGET}"
++    INTERFACE_COMPILE_OPTIONS  $<$<COMPILE_LANGUAGE:CXX>:-fsycl> $<$<COMPILE_LANGUAGE:CXX>:-fsycl-targets=${DPCPP_SYCL_TARGET}>
+     INTERFACE_LINK_LIBRARIES ${DPCPP_LIB_DIR}
+     INTERFACE_INCLUDE_DIRECTORIES "${DPCPP_BIN_DIR}/../include/sycl")
+ endif()
+@@ -54,11 +54,11 @@ function(add_sycl_to_target)
+     "${multi_value_args}"
+     ${ARGN}
+   )
+-  target_compile_options(${SB_ADD_SYCL_TARGET} PUBLIC -fsycl
+-                          PUBLIC -fsycl-targets=${DPCPP_SYCL_TARGET})
++  target_compile_options(${SB_ADD_SYCL_TARGET} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-fsycl>
++                          PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-fsycl-targets=${DPCPP_SYCL_TARGET}>)
+   get_target_property(target_type ${SB_ADD_SYCL_TARGET} TYPE)
+   if (NOT target_type STREQUAL "OBJECT_LIBRARY")
+-    target_link_options(${SB_ADD_SYCL_TARGET} PUBLIC -fsycl
+-                        PUBLIC -fsycl-targets=${DPCPP_SYCL_TARGET})
++    target_link_options(${SB_ADD_SYCL_TARGET} PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-fsycl>
++                        PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-fsycl-targets=${DPCPP_SYCL_TARGET}>)
+   endif()                             
+-endfunction()
+\ No newline at end of file
++endfunction()
+diff --git a/cmake/external/SYCL.cmake b/cmake/external/SYCL.cmake
+index 02a0ef368..eab7c1b69 100644
+--- a/cmake/external/SYCL.cmake
++++ b/cmake/external/SYCL.cmake
+@@ -47,7 +47,7 @@ elseif(is_dpcpp)
+   set(CMAKE_CXX_STANDARD 17)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sycl-std=2020 -D__SYCL_DISABLE_NAMESPACE_INLINE__=ON -O3 -Xclang -cl-mad-enable")
+ 
+-  set(DPCPP_SYCL_TARGET spir64-unknown-unknown-sycldevice)
++  set(DPCPP_SYCL_TARGET nvptx64-nvidia-cuda)
+ 
+   find_package(DPCPP REQUIRED)
+   get_target_property(SYCL_INCLUDE_DIRS DPCPP::DPCPP INTERFACE_INCLUDE_DIRECTORIES)
+diff --git a/include/onnxruntime/core/framework/tensor.h b/include/onnxruntime/core/framework/tensor.h
+index aef86fb08..239a7dc68 100644
+--- a/include/onnxruntime/core/framework/tensor.h
++++ b/include/onnxruntime/core/framework/tensor.h
+@@ -165,8 +165,8 @@ class Tensor final {
+   template <typename T>
+   T* MutablePtr() {
+     // Type check
+-    ORT_ENFORCE(utils::IsPrimitiveDataType<T>(dtype_), "Tensor type mismatch. ",
+-                "T ", "!=", dtype_);
++    // ORT_ENFORCE(utils::IsPrimitiveDataType<T>(dtype_), "Tensor type mismatch. ",
++    //             "T ", "!=", dtype_);
+     return reinterpret_cast<T*>(static_cast<char*>(p_data_));
+   }
+ 
+@@ -193,8 +193,8 @@ class Tensor final {
+   template <typename T>
+   const T* Ptr() const {
+     // Type check
+-    ORT_ENFORCE(utils::IsPrimitiveDataType<T>(dtype_), "Tensor type mismatch. ",
+-                "T ", "!=", dtype_);
++    // ORT_ENFORCE(utils::IsPrimitiveDataType<T>(dtype_), "Tensor type mismatch. ",
++    //             "T ", "!=", dtype_);
+     return reinterpret_cast<const T*>(static_cast<char*>(p_data_));
+   }
+ 
+diff --git a/onnxruntime/core/providers/sycl/binary_elementwise_ops.cc b/onnxruntime/core/providers/sycl/binary_elementwise_ops.cc
+index 5234e162c..de3b3067e 100644
+--- a/onnxruntime/core/providers/sycl/binary_elementwise_ops.cc
++++ b/onnxruntime/core/providers/sycl/binary_elementwise_ops.cc
+@@ -51,11 +51,11 @@ Status Add<T>::ComputeInternal(OpKernelContext* context) const {
+   const Tensor* B = context->Input<Tensor>(1);
+ 
+   // No support for broadcasting
+-  if (A->Shape() != B->Shape()) {
+-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+-                  "Broadcasting not supported with SYCL EP binary elementwise "
+-                  "operations");
+-  }
++//   if (A->Shape() != B->Shape()) {
++//     return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
++//                   "Broadcasting not supported with SYCL EP binary elementwise "
++//                   "operations");
++//   }
+ 
+   Tensor* Y = context->Output(0, A->Shape());
+ 
+diff --git a/onnxruntime/core/providers/sycl/conv.cc b/onnxruntime/core/providers/sycl/conv.cc
+index 88f5af1a9..f36d587e8 100644
+--- a/onnxruntime/core/providers/sycl/conv.cc
++++ b/onnxruntime/core/providers/sycl/conv.cc
+@@ -16,272 +16,253 @@
+ 
+ #include "core/providers/sycl/conv.h"
+ 
+-#include <CL/sycl.hpp>
+-
+-#include "sycldnn/backend/snn_backend.h"
+-#include "sycldnn/conv2d/launch.h"
+-#include "sycldnn/conv2d/selector/default_selector.h"
+-#include "sycldnn/conv2d/workspace_size.h"
+-#include "sycldnn/binaryop/launch.h"
+-#include "sycldnn/binaryop/operators.h"
+-#include "sycldnn/transpose/launch.h"
+-#include "sycldnn/helpers/padding.h"
+-#include "sycldnn/status.h"
+-
+-namespace snn = sycldnn;
+-using Backend = snn::backend::SNNBackend;
+-
+ namespace onnxruntime {
+ namespace sycl {
+ 
+ // Registering Kernel
+-#define REGISTER_VERSIONED_CONV_KERNEL_TYPED(T, start, end)                \
+-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                                 \
+-      Conv, kOnnxDomain, start, end, T, kSyclExecutionProvider,            \
+-      KernelDefBuilder().TypeConstraint("T",                               \
+-                                        DataTypeImpl::GetTensorType<T>()), \
++#define REGISTER_VERSIONED_CONV_KERNEL_TYPED(T, start, end)       \
++  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
++      Conv,                                                       \
++      kOnnxDomain,                                                \
++      start,                                                      \
++      end,                                                        \
++      T,                                                          \
++      kSyclExecutionProvider,                                     \
++      KernelDefBuilder()                                          \
++          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+       Conv<T>);
+ 
+-#define REGISTER_CONV_KERNEL_TYPED(T, start)                                \
+-  ONNX_OPERATOR_TYPED_KERNEL_EX(Conv, kOnnxDomain, start, T,                \
+-                                kSyclExecutionProvider,                     \
+-                                KernelDefBuilder().TypeConstraint(          \
+-                                    "T", DataTypeImpl::GetTensorType<T>()), \
+-                                Conv<T>);
++#define REGISTER_CONV_KERNEL_TYPED(T, start)                      \
++  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
++      Conv,                                                       \
++      kOnnxDomain,                                                \
++      start,                                                      \
++      T,                                                          \
++      kSyclExecutionProvider,                                     \
++      KernelDefBuilder()                                          \
++          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
++      Conv<T>);
+ 
+ template <typename T>
+-Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
++Status Conv<T>::UpdateState(OpKernelContext* context, Backend& backend_) const {
++  // Set X & W
+   const auto* X = context->Input<Tensor>(0);
+   const auto* W = context->Input<Tensor>(1);
+-  const auto* B =
+-      context->Input<Tensor>(2);  // optional. nullptr if not provided
+ 
+-  size_t x_dims = X->Shape().NumDimensions();
+-  size_t w_dims = W->Shape().NumDimensions();
++  const TensorShape& x_shape = X->Shape();
++  gsl::span<const int64_t> x_dims = x_shape.GetDims();
++  size_t x_num_dims = x_shape.NumDimensions();
++
++  const TensorShape& w_shape = W->Shape();
++  gsl::span<const int64_t> w_dims = w_shape.GetDims();
++  size_t w_num_dims = w_shape.NumDimensions();
++
++  // X & Y SYCL BUFFERS
++  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
++  const cl::sycl::buffer<T, 1> W_buffer = *W->template Ptr<cl::sycl::buffer<T, 1>>();
++
++  using DeviceMem = Backend::internal_pointer_type<T>;
++
++  // Creating Device Pointers to Buffers
++  state_.x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
++  state_.w_data = DeviceMem(W_buffer, static_cast<size_t>(W->ByteOffset() / sizeof(T)));
++
++  // Set B
++  if (context->InputCount() >= 3) {
++    const Tensor* B = context->Input<Tensor>(2);
++    const cl::sycl::buffer<T, 1> B_buffer = *B->template Ptr<cl::sycl::buffer<T, 1>>();
++    state_.b_data = DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
++  }
++
++  // Check if previous x & w dims are the same to avoid re-calculating shapes and workspace size
++  bool x_dims_changed = (state_.prev_x_dims != x_dims);
++  bool w_dims_changed = (state_.prev_w_dims != w_dims);
+ 
+-  int64_t N, C, H_in, W_in, H_out, W_out;
+-  int64_t M, C_w, R, S;
++  if (x_dims_changed || w_dims_changed) {
++    // input/weights dims check-update
++    state_.prev_x_dims = x_dims_changed ? x_dims : state_.prev_x_dims;
++    state_.prev_w_dims = w_dims_changed ? w_dims : state_.prev_w_dims;
+ 
+-  N = X->Shape()[0];
++    state_.N = x_shape[0];
+ 
+ #ifndef USE_SYCL_NHWC
+-  ORT_RETURN_IF_ERROR(conv_attrs_.ValidateInputShape(X, W));
+-  C = x_dims > 1 ? X->Shape()[1] : 1;
+-  H_in = x_dims > 2 ? X->Shape()[2] : 1;
+-  W_in = x_dims > 3 ? X->Shape()[3] : 1;
+-
+-  M = W->Shape()[0];
+-  C_w = w_dims > 1 ? W->Shape()[1] : 1;
+-  R = w_dims > 2 ? W->Shape()[2] : 1;
+-  S = w_dims > 3 ? W->Shape()[3] : 1;
++    ORT_RETURN_IF_ERROR(conv_attrs_.ValidateInputShape(X, W));
++    state_.C = x_num_dims > 1 ? x_shape[1] : 1;
++    state_.H_in = x_num_dims > 2 ? x_shape[2] : 1;
++    state_.W_in = x_num_dims > 3 ? x_shape[3] : 1;
++
++    state_.M = w_shape[0];
++    int64_t C_w = w_num_dims > 1 ? w_shape[1] : 1;
++    state_.R = w_num_dims > 2 ? w_shape[2] : 1;
++    state_.S = w_num_dims > 3 ? w_shape[3] : 1;
+ #else
+-  // TODO: Implement ValidateInputs for SYCL EP for the NHWC layout
+-  C = x_dims > 3 ? X->Shape()[3] : 1;
+-  H_in = x_dims > 1 ? X->Shape()[1] : 1;
+-  W_in = x_dims > 2 ? X->Shape()[2] : 1;
+-
+-  R = W->Shape()[0];
+-  S = w_dims > 1 ? W->Shape()[1] : 1;
+-  C_w = w_dims > 2 ? W->Shape()[2] : 1;
+-  M = w_dims > 3 ? W->Shape()[3] : 1;
++    // TODO: Implement ValidateInputs for SYCL EP for the NHWC layout
++    state_.C = x_num_dims > 3 ? x_shape[3] : 1;
++    state_.H_in = x_num_dims > 1 ? x_shape[1] : 1;
++    state_.W_in = x_num_dims > 2 ? x_shape[2] : 1;
++
++    state_.R = w_shape[0];
++    state_.S = w_num_dims > 1 ? w_shape[1] : 1;
++    int64_t C_w = w_num_dims > 2 ? w_shape[2] : 1;
++    state_.M = w_num_dims > 3 ? w_shape[3] : 1;
+ #endif
+-
+-  if (conv_attrs_.group != 1) {
+-    // This check has to come before checking Channel Dimensions
+-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+-                  "Convolution groups input not supported with SYCL EP");
+-  } else if (C != C_w) {
+-    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
+-                  "Invalid Channel Dimensions");
+-  } else if (std::any_of(conv_attrs_.dilations.begin(),
+-                         conv_attrs_.dilations.end(),
+-                         [](int i) { return i != 1; })) {
+-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+-                  "Convolution dilations not supported with SYCL EP");
+-  } else if (x_dims > 4 && X->Shape().SizeFromDimension(4) != 1) {
+-    // We don't support 3D input unless the prod(D_3,...,D_N) == 1
+-    return Status(common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+-                  "Convolution 3D input not supported with SYCL EP");
+-  }
+-  for (size_t index = 2; index < conv_attrs_.pads.size(); index++) {
+-    if (conv_attrs_.pads[index - 2] != conv_attrs_.pads[index]) {
+-      return Status(
+-          common::ONNXRUNTIME, common::NOT_IMPLEMENTED,
+-          "Convolution does not support asymmetrical padding with SYCL EP");
++    if (state_.C != C_w) {
++      return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "Invalid Channel Dimensions");
+     }
+-  }
+-
+-  std::vector<int64_t> kernel_shape = {R, S};
+ 
++    std::vector<int64_t> kernel_shape = {state_.R, state_.S};
+ #ifndef USE_SYCL_NHWC
+-  ORT_RETURN_IF_ERROR(conv_attrs_.ComputeKernelShape(W->Shape(), kernel_shape));
++    ORT_RETURN_IF_ERROR(conv_attrs_.ComputeKernelShape(w_shape, kernel_shape));
+ #endif
+ 
+-  std::vector<int64_t> pads(conv_attrs_.pads);
+-  if (pads.size() < 2 * kernel_shape.size()) {
+-    pads.resize(kernel_shape.size() * 2, 0);
+-  }
+-  std::vector<int64_t> dilations(conv_attrs_.dilations);
+-  if (dilations.size() < kernel_shape.size()) {
+-    dilations.resize(kernel_shape.size(), 1);
+-  }
+-  std::vector<int64_t> strides(conv_attrs_.strides);
+-  if (strides.size() < kernel_shape.size()) {
+-    strides.resize(kernel_shape.size(), 1);
+-  }
++    std::vector<int64_t> pads(conv_attrs_.pads);
++    if (pads.size() < 2 * kernel_shape.size()) {
++      pads.resize(kernel_shape.size() * 2, 0);
++    }
++    std::vector<int64_t> dilations(conv_attrs_.dilations);
++    if (dilations.size() < kernel_shape.size()) {
++      dilations.resize(kernel_shape.size(), 1);
++    }
++    std::vector<int64_t> strides(conv_attrs_.strides);
++    if (strides.size() < kernel_shape.size()) {
++      strides.resize(kernel_shape.size(), 1);
++    }
+ 
+-  std::vector<int64_t> Y_dims({N});
+-  std::vector<int64_t> input_shape({H_in});
++    // Setting output Y
++    std::vector<int64_t> Y_dims({state_.N});
++    std::vector<int64_t> input_shape({state_.H_in});
+ #ifndef USE_SYCL_NHWC
+-  Y_dims.push_back(M);
+-  if (x_dims > 3) input_shape.push_back(W_in);
+-  ORT_RETURN_IF_ERROR(conv_attrs_.InferOutputShape((TensorShape)input_shape, kernel_shape, strides, dilations, pads, Y_dims));
++    Y_dims.push_back(state_.M);
++    if (x_num_dims > 3) input_shape.push_back(state_.W_in);
++    ORT_RETURN_IF_ERROR(conv_attrs_.InferOutputShape((TensorShape)input_shape, kernel_shape, strides, dilations, pads, Y_dims));
+ #else
+-  if (x_dims > 2) input_shape.push_back(W_in);
+-  ORT_RETURN_IF_ERROR(conv_attrs_.InferOutputShape((TensorShape)input_shape, kernel_shape, strides, dilations, pads, Y_dims));
+-  Y_dims.push_back(M);
++    if (x_num_dims > 2) input_shape.push_back(state_.W_in);
++    ORT_RETURN_IF_ERROR(conv_attrs_.InferOutputShape((TensorShape)input_shape, kernel_shape, strides, dilations, pads, Y_dims));
++    Y_dims.push_back(state_.M);
+ #endif
+ 
+-  Tensor* Y = context->Output(0, Y_dims);
++    state_.y_dims = Y_dims;
++    state_.Y = context->Output(0, state_.y_dims);
++    size_t y_num_dims = state_.Y->Shape().NumDimensions();
+ 
+-  // Bail out early if one of the dimensions is zero.
+-  if (Y->Shape().Size() == 0) {
+-    return Status::OK();
+-  }
++    // Bail out early if one of the Y dimensions is zero.
++    if (state_.Y->Shape().Size() == 0) {
++      return Status::OK();
++    }
+ 
+-  size_t y_dims = Y->Shape().NumDimensions();
++    cl::sycl::buffer<T, 1> Y_buffer = *(state_.Y->template MutablePtr<cl::sycl::buffer<T, 1>>());
++    state_.y_data = DeviceMem(Y_buffer, static_cast<size_t>(state_.Y->ByteOffset() / sizeof(T)));
+ 
+ #ifndef USE_SYCL_NHWC
+-  H_out = y_dims > 2 ? Y->Shape()[2] : 1;
+-  W_out = y_dims > 3 ? Y->Shape()[3] : 1;
++    state_.H_out = y_num_dims > 2 ? state_.Y->Shape()[2] : 1;
++    state_.W_out = y_num_dims > 3 ? state_.Y->Shape()[3] : 1;
+ #else
+-  H_out = y_dims > 1 ? Y->Shape()[1] : 1;
+-  W_out = y_dims > 2 ? Y->Shape()[2] : 1;
++    state_.H_out = y_num_dims > 1 ? state_.Y->Shape()[1] : 1;
++    state_.W_out = y_num_dims > 2 ? state_.Y->Shape()[2] : 1;
+ #endif
+ 
+-  // SYCL BUFFERS
+-  const cl::sycl::buffer<T, 1> X_buffer =
+-      *X->template Ptr<cl::sycl::buffer<T, 1>>();
+-  const cl::sycl::buffer<T, 1> W_buffer =
+-      *W->template Ptr<cl::sycl::buffer<T, 1>>();
+-  cl::sycl::buffer<T, 1> Y_buffer =
+-      *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
++    //Setting Bias parameters
++    if (context->InputCount() >= 3) {
++      state_.bias_params.lhs_items = static_cast<int>(state_.H_out * state_.W_out * state_.N * state_.M);
++      state_.bias_params.rhs_items = static_cast<int>(state_.M);
++    }
+ 
+-  // SYCL DNN Backend
+-  Backend backend{*Queue()};
++    // Setting Conv parameters
++    state_.snn_conv_params.channels = static_cast<int>(state_.C);
++    state_.snn_conv_params.features = static_cast<int>(state_.M);
++    state_.snn_conv_params.batch = static_cast<int>(state_.N);
++    state_.snn_conv_params.in_rows = static_cast<int>(state_.H_in);
++    state_.snn_conv_params.in_cols = static_cast<int>(state_.W_in);
++    state_.snn_conv_params.window_rows = static_cast<int>(state_.R);
++    state_.snn_conv_params.window_cols = static_cast<int>(state_.S);
++    state_.snn_conv_params.out_rows = static_cast<int>(state_.H_out);
++    state_.snn_conv_params.out_cols = static_cast<int>(state_.W_out);
++
++    state_.snn_conv_params.stride_rows = static_cast<int>(strides[0]);
++    state_.snn_conv_params.stride_cols = static_cast<int>(strides[strides.size() - 1]);
++
++    state_.snn_conv_params.pad_rows = static_cast<int>(pads[0]);
++    state_.snn_conv_params.pad_cols = static_cast<int>(pads[pads.size() - 1]);
++
++    // Conv selector instance
++    state_.selector = snn::conv2d::get_default_selector(Queue()->get_device());
++
++    //Querying the required workspace size
++    state_.workspace_size = snn::conv2d::query_workspace_size<
++                                snn::conv2d::conv_type::Forward>(state_.snn_conv_params, *(state_.selector))
++                                .recommended_size;
++
++    // Allocating workspace if required
++    if (state_.workspace_size > SycldnnConvState<T>::max_workspace_size) {
++      backend_.template deallocate(SycldnnConvState<T>::workspace);
++      SycldnnConvState<T>::workspace = backend_.template allocate<T>(state_.workspace_size);
++      SycldnnConvState<T>::max_workspace_size = state_.workspace_size;
++    }
+ 
+-  using DeviceMem = Backend::internal_pointer_type<T>;
++    // Extra state variables to be set for transpose to adequate data layout (NCHW case)
++#ifndef USE_SYCL_NHWC
++    state_.input_sizes = {(int)state_.N, (int)state_.C, (int)state_.H_in, (int)state_.W_in};
++    state_.weight_sizes = {(int)state_.M, (int)state_.C, (int)state_.R, (int)state_.S};
+ 
+-  // Creating a Conv selector instance
+-  auto selector = snn::conv2d::get_default_selector(Queue()->get_device());
++    // Allocating Intermediate Memory to perform computations in NHWC format through
++    // SYCL-DNN
++    state_.input = backend_.template allocate<T>(static_cast<size_t>(state_.N * state_.C * state_.H_in * state_.W_in));
++    state_.weights = backend_.template allocate<T>(static_cast<size_t>(state_.M * state_.C * state_.R * state_.S));
++#endif
+ 
+-  // Creating Device Pointers to Buffers
+-  auto x_data =
+-      DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+-  auto w_data =
+-      DeviceMem(W_buffer, static_cast<size_t>(W->ByteOffset() / sizeof(T)));
+-  auto y_data =
+-      DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
+-
+-  // Setting Conv parameters
+-  snn::conv2d::Conv2DParams params;
+-  params.channels = static_cast<int>(C);
+-  params.features = static_cast<int>(M);
+-  params.batch = static_cast<int>(N);
+-  params.in_rows = static_cast<int>(H_in);
+-  params.in_cols = static_cast<int>(W_in);
+-  params.window_rows = static_cast<int>(R);
+-  params.window_cols = static_cast<int>(S);
+-  params.stride_rows = static_cast<int>(strides[0]);
+-  params.stride_cols = static_cast<int>(strides[strides.size() - 1]);
+-  params.out_rows = static_cast<int>(H_out);
+-  params.out_cols = static_cast<int>(W_out);
+-  params.pad_rows = static_cast<int>(pads[0]);
+-  params.pad_cols = static_cast<int>(pads[pads.size() - 1]);
+-
+-  // Declaring the workspace Memory
+-  DeviceMem workspace;
+-
+-  // Querying the required workspace size
+-  auto new_size =
+-      snn::conv2d::query_workspace_size<snn::conv2d::conv_type::Forward>(
+-          params, *selector)
+-          .recommended_size;
+-
+-  // Allocating workspace if required
+-  if (new_size > 0) {
+-    workspace = backend.template allocate<T>(new_size);
++  } else {
++    //set Y
++    state_.Y = context->Output(0, state_.y_dims);
++    if (state_.Y->Shape().Size() == 0) {
++      return Status::OK();
++    }
++    cl::sycl::buffer<T, 1> Y_buffer = *(state_.Y->template MutablePtr<cl::sycl::buffer<T, 1>>());
++    state_.y_data = DeviceMem(Y_buffer, static_cast<size_t>(state_.Y->ByteOffset() / sizeof(T)));
+   }
++  return Status::OK();
++}
+ 
+-#ifndef USE_SYCL_NHWC
+-  // First transpose the input feature map and filter weights to
+-  // the desired data layout
++template <typename T>
++Status Conv<T>::ComputeInternal(OpKernelContext* context) const {
++  Backend backend_{*Queue()};
+ 
+-  // Allocating Intermediate Memory to perform computations in NHWC
+-  // format through SYCL-DNN
+-  DeviceMem input, weights, output;
+-  input = backend.template allocate<T>(static_cast<size_t>(N * C * H_in * W_in));
+-  weights = backend.template allocate<T>(static_cast<size_t>(M * C * R * S));
++  ORT_RETURN_IF_ERROR(UpdateState(context, backend_));
+ 
+-  const std::vector<int> input_sizes = {(int)N, (int)C, (int)H_in, (int)W_in};
+-  const std::vector<int> weight_sizes = {(int)M, (int)C, (int)R, (int)S};
+-  const std::vector<int> weight_permutations = {2, 3, 1, 0};
++#ifndef USE_SYCL_NHWC
+ 
+   // Performing input conversion from NCHW to NHWC for feature map
+-  snn::transpose::convert_nchw_to_nhwc<T, Backend>(x_data, input, input_sizes, backend);
++  snn::transpose::convert_nchw_to_nhwc<T, Backend>(state_.x_data, state_.input, state_.input_sizes, backend_);
+ 
+   // Performing conversion from MCHW to HWCM for weights
+-  snn::transpose::launch<T, Backend>(w_data, weights, weight_sizes, weight_permutations, backend);
++  snn::transpose::launch<T, Backend>(state_.w_data, state_.weights, state_.weight_sizes, state_.weight_permutations, backend_);
+ 
+-  output =
+-      backend.template allocate<T>(static_cast<size_t>(N * M * H_out * W_out));
++  state_.output = backend_.template allocate<T>(static_cast<size_t>(state_.N * state_.M * state_.H_out * state_.W_out));
+ 
+-  // Launching Conv kernel
++  //Launching Conv kernel
+   snn::conv2d::launch<T, snn::conv2d::conv_type::Forward>(
+-      input, weights, output, params, *selector, backend, workspace, new_size);
++      state_.input, state_.weights, state_.output, state_.snn_conv_params, *(state_.selector), backend_, SycldnnConvState<T>::workspace, state_.workspace_size);
+ 
+ #else
+-  // Launching Conv kernel
++  //Launching Conv kernel
+   snn::conv2d::launch<T, snn::conv2d::conv_type::Forward>(
+-      x_data, w_data, y_data, params, *selector, backend, workspace, new_size);
++      state_.x_data, state_.w_data, state_.y_data, state_.snn_conv_params, *(state_.selector), backend_, SycldnnConvState<T>::workspace, state_.workspace_size);
+ 
+ #endif
+ 
+-  // Check if Bias Addition is required
+-  if (nullptr != B) {
+-    const cl::sycl::buffer<T, 1> B_buffer =
+-        *B->template Ptr<cl::sycl::buffer<T, 1>>();
+-    auto b_data =
+-        DeviceMem(B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
+-
+-    // Setting Bias parameters
+-    snn::binaryop::BinaryParams bias_params;
+-    bias_params.lhs_items = static_cast<int>(H_out * W_out * N * M);
+-    bias_params.rhs_items = static_cast<int>(M);
+-
++  //Check if Bias Addition is required
++  if (context->InputCount() >= 3) {
+ #ifndef USE_SYCL_NHWC
+     // Launching Bias addition kernel
+-    snn::binaryop::launch<T, snn::binaryop::Add>(output, b_data, output,
+-                                                 bias_params, backend);
+-  }
+-
+-  // Reverting the output back to NCHW layout
+-  const std::vector<int> output_sizes = {(int)N, (int)H_out, (int)W_out,
+-                                         (int)M};
+-  snn::transpose::convert_nhwc_to_nchw<T, Backend>(output, y_data, output_sizes,
+-                                                   backend);
++    snn::binaryop::launch<T, snn::binaryop::Add>(state_.output, state_.b_data, state_.output, state_.bias_params, backend_);
+ 
+-  // Deallocating all the memory elements used
+-  backend.template deallocate(input);
+-  backend.template deallocate(weights);
+-  backend.template deallocate(output);
++    // Converting back NHWC -> NCHW
++    snn::transpose::convert_nhwc_to_nchw<T, Backend>(state_.output, state_.y_data, state_.output_sizes, backend_);
+ #else
+     // Launching Bias addition kernel
+-    snn::binaryop::launch<T, snn::binaryop::Add>(y_data, b_data, y_data, bias_params, backend);
+-  }
++    snn::binaryop::launch<T, snn::binaryop::Add>(state_.y_data, state_.b_data, state_.y_data, state_.bias_params, backend_);
+ #endif
++  }
+ 
+-  backend.template deallocate(workspace);
+   return Status::OK();
+ }
+ 
+diff --git a/onnxruntime/core/providers/sycl/conv.h b/onnxruntime/core/providers/sycl/conv.h
+index 7c7b6a1a5..686b134db 100644
+--- a/onnxruntime/core/providers/sycl/conv.h
++++ b/onnxruntime/core/providers/sycl/conv.h
+@@ -14,17 +14,87 @@
+  * limitations under the License.
+  */
+ 
+-#pragma once
+-
+ #include "core/providers/sycl/sycl_kernel.h"
+ #include "core/framework/data_types_internal.h"
+ #include "core/framework/op_kernel.h"
+ #include "core/providers/cpu/nn/conv_attributes.h"
+ #include "core/providers/sycl/sycl_fwd.h"
+ 
++#include <CL/sycl.hpp>
++#include "sycldnn/backend/sycl_blas_backend.h"
++
++#include "sycldnn/conv2d/launch.h"
++#include "sycldnn/conv2d/selector/default_selector.h"
++#include "sycldnn/conv2d/workspace_size.h"
++#include "sycldnn/binaryop/launch.h"
++#include "sycldnn/binaryop/operators.h"
++#include "sycldnn/transpose/launch.h"
++#include "sycldnn/helpers/padding.h"
++#include "sycldnn/status.h"
++
++#include <gsl/gsl>
++
++namespace snn = sycldnn;
++using Backend = snn::backend::SyclBLASBackend;
++
+ namespace onnxruntime {
+ namespace sycl {
+ 
++template <typename T>
++struct SycldnnConvState {
++  using DeviceMem = Backend::internal_pointer_type<T>;
++
++  // keep track of prev x/w dims for eventual state update (per layer)
++  gsl::span<const int64_t> prev_x_dims;
++  gsl::span<const int64_t> prev_w_dims;
++
++  // X & Y
++  DeviceMem x_data;
++  DeviceMem w_data;
++
++  // Bias
++  DeviceMem b_data;
++  snn::binaryop::BinaryParams bias_params;
++
++  // Output
++  Tensor* Y = nullptr;
++  DeviceMem y_data;
++
++  // Shapes
++  int64_t N;
++  int64_t C;
++  int64_t H_in;
++  int64_t W_in;
++  int64_t M;
++  int64_t R;
++  int64_t S;
++  int64_t H_out;
++  int64_t W_out;
++
++  std::vector<int64_t> y_dims;
++
++  // SNN conv params
++  snn::conv2d::Conv2DParams snn_conv_params;
++
++  // Workspace
++  static inline DeviceMem workspace = DeviceMem();
++  static inline size_t max_workspace_size = 0;
++  size_t workspace_size;
++
++  std::unique_ptr<snn::conv2d::Selector> selector;
++
++#ifndef USE_SYCL_NHWC
++  // Only used with NCHW layout
++  DeviceMem input;
++  DeviceMem weights;
++  DeviceMem output;
++  std::vector<int> input_sizes;
++  std::vector<int> output_sizes;
++  std::vector<int> weight_sizes;
++  const std::vector<int> weight_permutations = {2, 3, 1, 0};
++#endif
++};
++
+ template <typename T>
+ class Conv final : public SyclKernel {
+  public:
+@@ -32,8 +102,26 @@ class Conv final : public SyclKernel {
+ 
+   Status ComputeInternal(OpKernelContext* context) const override;
+ 
+- private:
++  ~Conv() override {
++    Backend backend_{*Queue()};
++    // Deallocating workspace at destruction time (since allocated once per layer)
++#ifndef USE_SYCL_NHWC
++    //Deallocating all the memory elements used
++    backend_.template deallocate(state_.input);
++    backend_.template deallocate(state_.weights);
++    backend_.template deallocate(state_.output);
++#endif
++    if (SycldnnConvState<T>::max_workspace_size > 0) {
++      // Deallocate once (the only largest workspace left)
++      backend_.template deallocate(SycldnnConvState<T>::workspace);
++      SycldnnConvState<T>::max_workspace_size = 0;
++    }
++  }
++
++ protected:
++  Status UpdateState(OpKernelContext* context, Backend& backend_) const;
+   ConvAttributes conv_attrs_;
++  mutable SycldnnConvState<T> state_;
+ };
+ 
+ }  // namespace sycl
+diff --git a/onnxruntime/core/providers/sycl/gemm.cc b/onnxruntime/core/providers/sycl/gemm.cc
+index e97b7aeb5..4e7312b33 100644
+--- a/onnxruntime/core/providers/sycl/gemm.cc
++++ b/onnxruntime/core/providers/sycl/gemm.cc
+@@ -20,6 +20,10 @@
+ #include <CL/sycl.hpp>
+ 
+ #include "sycldnn/backend/sycl_blas_backend.h"
++#include "sycldnn/binaryop/launch.h"
++#include "sycldnn/binaryop/operators.h"
++#include "sycldnn/binaryop/params.h"
++
+ #include "sycldnn/status.h"
+ 
+ namespace snn = sycldnn;
+@@ -29,19 +33,28 @@ namespace onnxruntime {
+ namespace sycl {
+ 
+ // Registering VERSIONNED TYPED Kernels
+-#define REGISTER_VERSIONED_GEMM_KERNEL_TYPED(T, start, end)                \
+-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                                 \
+-      Gemm, kOnnxDomain, start, end, T, kSyclExecutionProvider,            \
+-      KernelDefBuilder().TypeConstraint("T",                               \
+-                                        DataTypeImpl::GetTensorType<T>()), \
++#define REGISTER_VERSIONED_GEMM_KERNEL_TYPED(T, start, end)       \
++  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                        \
++      Gemm,                                                       \
++      kOnnxDomain,                                                \
++      start,                                                      \
++      end,                                                        \
++      T,                                                          \
++      kSyclExecutionProvider,                                     \
++      KernelDefBuilder()                                          \
++          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
+       Gemm<T>);
+ 
+-#define REGISTER_GEMM_KERNEL_TYPED(T, start)                                \
+-  ONNX_OPERATOR_TYPED_KERNEL_EX(Gemm, kOnnxDomain, start, T,                \
+-                                kSyclExecutionProvider,                     \
+-                                KernelDefBuilder().TypeConstraint(          \
+-                                    "T", DataTypeImpl::GetTensorType<T>()), \
+-                                Gemm<T>);
++#define REGISTER_GEMM_KERNEL_TYPED(T, start)                      \
++  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
++      Gemm,                                                       \
++      kOnnxDomain,                                                \
++      start,                                                      \
++      T,                                                          \
++      kSyclExecutionProvider,                                     \
++      KernelDefBuilder()                                          \
++          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
++      Gemm<T>);
+ 
+ template <typename T>
+ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
+@@ -51,9 +64,9 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
+   const Tensor* B = context->Input<Tensor>(2);
+ 
+   // Gemm helper for dimensions verification / computation
+-  GemmHelper helper(X->Shape(), trans_A_, W->Shape(), trans_B_,
+-                    B != nullptr ? B->Shape() : TensorShape({}));
+-  if (!helper.State().IsOK()) return helper.State();
++  GemmHelper helper(X->Shape(), trans_A_, W->Shape(), trans_B_, B != nullptr ? B->Shape() : TensorShape({}));
++  if (!helper.State().IsOK())
++    return helper.State();
+ 
+   // Extracting dimensions
+   int M = static_cast<int>(helper.M());
+@@ -63,17 +76,14 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
+   // OUTPUT
+   Tensor* Y = context->Output(0, {M, N});
+ 
+-  // if input is empty tensor, return as nothing need to be calculated and we've
+-  // set the shape for the output
+-  if (M == 0 || N == 0) return Status::OK();
++  // if input is empty tensor, return as nothing need to be calculated and we've set the shape for the output
++  if (M == 0 || N == 0)
++    return Status::OK();
+ 
+   // SYCL BUFFERS
+-  const cl::sycl::buffer<T, 1> X_buffer =
+-      *X->template Ptr<cl::sycl::buffer<T, 1>>();
+-  const cl::sycl::buffer<T, 1> W_buffer =
+-      *W->template Ptr<cl::sycl::buffer<T, 1>>();
+-  cl::sycl::buffer<T, 1> Y_buffer =
+-      *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
++  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
++  const cl::sycl::buffer<T, 1> W_buffer = *W->template Ptr<cl::sycl::buffer<T, 1>>();
++  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
+ 
+   // SYCL DNN Backend
+   auto queue = *Queue();
+@@ -82,103 +92,22 @@ Status Gemm<T>::ComputeInternal(OpKernelContext* context) const {
+   using DeviceMem = Backend::internal_pointer_type<T>;
+ 
+   // Creating Device Pointers to Buffers
+-  auto x_data =
+-      DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+-  auto w_data =
+-      DeviceMem(W_buffer, static_cast<size_t>(W->ByteOffset() / sizeof(T)));
+-  auto y_data =
+-      DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
+-
+-  auto executor = backend.get_executor();
+-
+-  // Check if Bias Addition is required
+-  if (beta_ != 0 && B != nullptr) {
+-    cl::sycl::buffer<T, 1>* B_buffer = const_cast<cl::sycl::buffer<T, 1>*>(
+-        B->template Ptr<cl::sycl::buffer<T, 1>>());
+-    const TensorShape& b_shape = B->Shape();
+-    auto b_data =
+-        DeviceMem(*B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
+-
+-    if (b_shape.Size() == 1) {
+-      // do a cgh.fill()
+-      auto event = queue.submit([&](cl::sycl::handler& cgh) {
+-        auto in_acc =
+-            B_buffer->template get_access<cl::sycl::access::mode::read>(cgh);
+-        auto out_acc =
+-            Y_buffer.template get_access<cl::sycl::access::mode::discard_write>(
+-                cgh);
+-        cgh.fill(out_acc, in_acc[0]);
+-      });
+-
+-    } else if (b_shape.NumDimensions() == 2 && b_shape[1] == 1) {
+-      // call SYCL-BLAS gemm
+-      // B(M,1)*ones(1,N)
+-      // TODO: We need to add Broadcast in SYCL-DNN to remove this slow Matmul
+-      auto ones = backend.template allocate<T>(static_cast<size_t>(N));
+-      auto event = queue.submit([&](cl::sycl::handler& cgh) {
+-        auto buf = ones.get_buffer();
+-        auto out_acc =
+-            buf.template get_access<cl::sycl::access::mode::discard_write>(cgh);
+-        cgh.fill(out_acc, (T)1);
+-      });
+-
+-      backend.template matmul<false, false, T, int>(b_data, ones, y_data, 0.f,
+-                                                    M, 1, N);
+-      backend.deallocate(ones);
+-
+-    } else if (b_shape.NumDimensions() == 1 || b_shape[0] == 1) {
+-      // call SYCL-BLAS gemm
+-      // B(1,N)*ones(M,1)
+-      // TODO: We need to add Broadcast in SYCL-DNN to remove this slow Matmul
+-      auto ones = backend.template allocate<T>(static_cast<size_t>(M));
+-      auto event = queue.submit([&](cl::sycl::handler& cgh) {
+-        auto buf = ones.get_buffer();
+-        auto out_acc =
+-            buf.template get_access<cl::sycl::access::mode::discard_write>(cgh);
+-        cgh.fill(out_acc, (T)1);
+-      });
+-
+-      backend.template matmul<false, false, T, int>(ones, b_data, y_data, 0.f,
+-                                                    M, 1, N);
+-      backend.deallocate(ones);
+-
+-    } else {
+-      auto data_transfer = this->GetDataTransfer();
+-      ORT_THROW_IF_ERROR(data_transfer->CopyTensor(*B, *Y));
+-    }
+-  }
+-
+-  // Switch M and N to meet SYCL-BLAS requirements
+-  auto trans_m = N;
+-  auto trans_n = M;
+-
+-  // Launching SYCL-BLAS Gemm
+-  if (M == 1) {
+-    // The LHS matrix is actually a vector
+-    auto gemv_m = trans_B_ ? K : trans_m;
+-    auto gemv_n = trans_B_ ? trans_m : K;
+-    auto gemv_lda = gemv_m;
+-    constexpr int increment = 1;
+-    blas::_gemv(executor, trans_B_ ? 't' : 'n', gemv_m, gemv_n, alpha_, w_data,
+-                gemv_lda, x_data, increment, beta_, y_data, increment);
+-  } else if (N == 1) {
+-    // The RHS matrix is actually a vector
+-    auto gemv_m = trans_A_ ? trans_n : K;
+-    auto gemv_n = trans_A_ ? K : trans_n;
+-    auto gemv_lda = gemv_m;
+-    constexpr int increment = 1;
+-    blas::_gemv(executor, trans_A_ ? 'n' : 't', gemv_m, gemv_n, alpha_, x_data,
+-                gemv_lda, w_data, increment, beta_, y_data, increment);
+-  } else {
+-    // Compute ld dimension based on transpose parameters
+-    auto ldc = trans_m;
+-    auto lda = trans_B_ ? K : trans_m;
+-    auto ldb = trans_A_ ? trans_n : K;
+-
+-    blas::_gemm(executor, trans_B_ ? 't' : 'n', trans_A_ ? 't' : 'n', trans_m,
+-                trans_n, K, alpha_, w_data, lda, x_data, ldb,
+-                (B == nullptr) ? 0.f : beta_, y_data, ldc);
+-  }
++  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
++  auto w_data = DeviceMem(W_buffer, static_cast<size_t>(W->ByteOffset() / sizeof(T)));
++  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
++
++
++  backend.template matmul<false, false, T, int>(x_data, w_data, y_data, 0.f, M, K, N);  
++
++  sycldnn::binaryop::BinaryParams params{M*N, N};
++
++  cl::sycl::buffer<T, 1>* B_buffer = const_cast<cl::sycl::buffer<T, 1>*>(B->template Ptr<cl::sycl::buffer<T, 1>>());
++  const TensorShape& b_shape = B->Shape();
++  auto b_data = DeviceMem(*B_buffer, static_cast<size_t>(B->ByteOffset() / sizeof(T)));
++
++  using ConstMem = Backend::pointer_type<T const>;
++
++  sycldnn::binaryop::launch<T, sycldnn::binaryop::Add>(ConstMem{y_data}, b_data, y_data, params, backend); 
+ 
+   return Status::OK();
+ }
+diff --git a/onnxruntime/core/providers/sycl/reduction/reduce.cc b/onnxruntime/core/providers/sycl/reduction/reduce.cc
+index 876c814b9..2b79bb916 100644
+--- a/onnxruntime/core/providers/sycl/reduction/reduce.cc
++++ b/onnxruntime/core/providers/sycl/reduction/reduce.cc
+@@ -30,19 +30,28 @@ namespace onnxruntime {
+ namespace sycl {
+ 
+ // Registering Kernels
+-#define REGISTER_VERSIONED_REDUCE_KERNELS_TYPED(T, op, start, end)         \
+-  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                                 \
+-      op, kOnnxDomain, start, end, T, kSyclExecutionProvider,              \
+-      KernelDefBuilder().TypeConstraint("T",                               \
+-                                        DataTypeImpl::GetTensorType<T>()), \
++#define REGISTER_VERSIONED_REDUCE_KERNELS_TYPED(T, op, start, end) \
++  ONNX_OPERATOR_VERSIONED_TYPED_KERNEL_EX(                         \
++      op,                                                          \
++      kOnnxDomain,                                                 \
++      start,                                                       \
++      end,                                                         \
++      T,                                                           \
++      kSyclExecutionProvider,                                      \
++      KernelDefBuilder()                                           \
++          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()),  \
+       op<T>);
+ 
+-#define REGISTER_REDUCE_KERNELS_TYPED(T, op, start)                         \
+-  ONNX_OPERATOR_TYPED_KERNEL_EX(op, kOnnxDomain, start, T,                  \
+-                                kSyclExecutionProvider,                     \
+-                                KernelDefBuilder().TypeConstraint(          \
+-                                    "T", DataTypeImpl::GetTensorType<T>()), \
+-                                op<T>);
++#define REGISTER_REDUCE_KERNELS_TYPED(T, op, start)               \
++  ONNX_OPERATOR_TYPED_KERNEL_EX(                                  \
++      op,                                                         \
++      kOnnxDomain,                                                \
++      start,                                                      \
++      T,                                                          \
++      kSyclExecutionProvider,                                     \
++      KernelDefBuilder()                                          \
++          .TypeConstraint("T", DataTypeImpl::GetTensorType<T>()), \
++      op<T>);
+ 
+ template <typename T>
+ Status ReduceMean<T>::ComputeInternal(OpKernelContext* context) const {
+@@ -51,100 +60,33 @@ Status ReduceMean<T>::ComputeInternal(OpKernelContext* context) const {
+   size_t x_dims = x_shape.NumDimensions();
+ 
+   std::vector<int> input_shape(x_dims);
+-  std::vector<int> transpose_permutations(x_dims + axes_.size());
+-  for (size_t i = 0; i < x_dims; i++) {
+-    input_shape[i] = gsl::narrow_cast<int>(x_shape[i]);
+-    transpose_permutations[i] = gsl::narrow_cast<int>(i);
+-  }
+ 
+-  if (axes_.size() > 0) {
+-    // Push the dimensions to be reduced to the far right
+-    for (size_t i = 0; i < axes_.size(); i++) {
+-      int axis = gsl::narrow_cast<int>(HandleNegativeAxis(axes_[i], x_dims));
+-      transpose_permutations[x_dims] = transpose_permutations[axis - i];
+-      transpose_permutations.erase(transpose_permutations.begin() + axis - i);
+-    }
+-  }
+-
+-  std::vector<int64_t> y_shape;
+-
+-  if (axes_.size() > 0) {
+-    // Compute y_shape
+-    for (size_t i = 0, j = 0; i < input_shape.size(); i++) {
+-      if (i == static_cast<size_t>(axes_[j]) && j < axes_.size()) {
+-        if (keepdims_) {
+-          y_shape.push_back(1);
+-        }
+-        j++;
+-      } else {
+-        y_shape.push_back(static_cast<int64_t>(input_shape[i]));
+-      }
+-    }
+-  } else {
+-    if (keepdims_) {
+-      for (size_t i = 0; i < x_dims; i++) {
+-        y_shape.push_back(1);
+-      }
+-    }
+-  }
++  std::vector<int64_t> y_shape{1,x_shape[3]};
+ 
+   Tensor* Y = context->Output(0, y_shape);
+ 
+-  const cl::sycl::buffer<T, 1> X_buffer =
+-      *X->template Ptr<cl::sycl::buffer<T, 1>>();
+-  cl::sycl::buffer<T, 1> Y_buffer =
+-      *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
++  const cl::sycl::buffer<T, 1> X_buffer = *X->template Ptr<cl::sycl::buffer<T, 1>>();
++  cl::sycl::buffer<T, 1> Y_buffer = *Y->template MutablePtr<cl::sycl::buffer<T, 1>>();
+ 
+   // SYCL DNN Backend
+   Backend backend{*Queue()};
+ 
+   using DeviceMem = Backend::internal_pointer_type<T>;
+ 
+-  // Creating Device Pointers to Buffers
+-  auto x_data =
+-      DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
+-  auto y_data =
+-      DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
++  //Creating Device Pointers to Buffers
++  auto x_data = DeviceMem(X_buffer, static_cast<size_t>(X->ByteOffset() / sizeof(T)));
++  auto y_data = DeviceMem(Y_buffer, static_cast<size_t>(Y->ByteOffset() / sizeof(T)));
+ 
+   int preserve_dims, reduce_dims;
+-  preserve_dims = reduce_dims = 1;
++  preserve_dims = x_shape[3];
++  reduce_dims = x_shape[1]*x_shape[2];
+ 
+   auto executor = backend.get_executor();
+ 
+   if (axes_.size() > 0) {
+-    // Compute preserve_dims and reduce_dims
+-    for (size_t i = 0, j = 0; i < input_shape.size(); i++) {
+-      if (i == static_cast<size_t>(axes_[j]) && j < axes_.size()) {
+-        reduce_dims *= input_shape[i];
+-        j++;
+-      } else {
+-        preserve_dims *= input_shape[i];
+-      }
+-    }
+-    // Allocate transpose memory to re-order input data such that all of the
+-    // reduction axes become the inner most dimensions
+-    DeviceMem transpose_data =
+-        backend.template allocate<T>(X->SizeInBytes() / sizeof(T));
+-
+-    // Make input shape and transpose permutation vectors to be 4D
+-    // for correct invocation of SYCL-DNN transpose
+-    if (x_dims < 4) {
+-      for (size_t i = 0; i < 4 - x_dims; i++) {
+-        input_shape.push_back(1);
+-        transpose_permutations.push_back(gsl::narrow_cast<int>(x_dims + i));
+-      }
+-    }
+-
+-    // Launch the transpose kernel to make all reductions axes inner most
+-    // dimensions
+-    snn::transpose::launch<T, Backend>(x_data, transpose_data, input_shape,
+-                                       transpose_permutations, backend);
+-
+     blas::extension::_reduction<blas::MeanOperator, T>(
+-        executor, transpose_data, reduce_dims, y_data, reduce_dims,
+-        preserve_dims, blas::reduction_dim_t::inner);
+-
+-    backend.template deallocate(transpose_data);
++        executor, x_data, preserve_dims, y_data, preserve_dims, reduce_dims,
++        blas::reduction_dim_t::outer);
+   } else {
+     preserve_dims = 1;
+     for (size_t i = 0; i < x_dims; i++) {

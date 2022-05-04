@@ -1,0 +1,14 @@
+diff --git a/cmake/Modules/SYCL.cmake b/cmake/Modules/SYCL.cmake
+index e7b7ac7..916e6b3 100644
+--- a/cmake/Modules/SYCL.cmake
++++ b/cmake/Modules/SYCL.cmake
+@@ -105,7 +105,8 @@ elseif(is_dpcpp)
+   #TODO : (MEHDI) Create BuG report on intel/llvm 
+     set(DPCPP_SYCL_TARGET spir64-unknown-unknown-sycldevice)
+   elseif(${BACKEND_DEVICE} STREQUAL "NVIDIA_GPU")
+-    set(DPCPP_SYCL_TARGET nvptx64-nvidia-cuda-sycldevice)
++    set(DPCPP_SYCL_TARGET nvptx64-nvidia-cuda)
++    unset(CMAKE_C_STANDARD)
+   endif()
+   find_package(DPCPP REQUIRED)
+   get_target_property(SYCL_INCLUDE_DIRS DPCPP::DPCPP INTERFACE_INCLUDE_DIRECTORIES)
