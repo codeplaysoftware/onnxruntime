@@ -141,8 +141,8 @@ index e8d9d99..cc8c064 100644
 -    add_gemm_configuration(
 -      "${data}" 64 "false" "false" "false"
 -      64 2 2 4 4 1 1 1 1 4 4 "no_local" "standard" "full" 4 "interleaved")
-+          "${data}" 64 "false" "true" "true"
-+          64 2 2 8 8 1 1 1 1 1 1 "local" "standard" "full" 1 "strided")
++          "${data}" 64 "true" "false" "true"
++          64 8 8 8 8 1 1 1 1 1 1 "local" "standard" "full" 1 "strided")
    endforeach()
  else() # default cpu backend
    set(supported_types
@@ -201,7 +201,7 @@ index 7716c4a..f6c7ecf 100644
 -                                                                    _beta, _c,
 -                                                                    _ldc,
 +        return blas::Gemm_Launcher<
-+            64, false, true, true, 64, Tile<2, 2, 8, 8>, _t_a, _t_b,
++            64, true, false, true, 64, Tile<8, 8, 8, 8>, _t_a, _t_b,
 +            static_cast<int>(gemm_memory_t::local),
 +            static_cast<int>(gemm_algorithm_t::standard),
 +            static_cast<int>(gemm_vectorization_t::full), is_beta_zero, 1,
