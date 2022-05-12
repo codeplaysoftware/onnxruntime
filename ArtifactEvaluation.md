@@ -34,3 +34,10 @@ cd /home/networks/buildCUDA
 
 ./testNetwork --ep CUDA --image ../../imagenet-examples/10nchw.jpg.txt --model ../models/resnet50-v1-12.onnx
 ```
+
+### Using SYCL-DNN 
+```
+cd /home/networks/vgg
+
+./vgg ${SYCL_DNN_ROOT}/vgg_weights/ ../../imagenet-examples/10.jpg.bin 
+```

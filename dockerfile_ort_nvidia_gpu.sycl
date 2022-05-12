@@ -29,7 +29,9 @@ RUN DEBIAN_FRONTEND=noninteractive apt -yq update && apt install -yq --no-instal
     wget --no-verbose ${CMAKE_URL} -O /tmp/cmake.tar.gz && \
     tar -zxf /tmp/cmake.tar.gz --strip=1 -C /usr --wildcards cmake*/bin/cmake cmake*/bin/ctest cmake*/share/cmake*/Modules cmake*/share/cmake*/Templates 
 RUN apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
-RUN pip3 install flatbuffers numpy
+RUN pip3 install flatbuffers numpy h5py
+RUN python3 -m pip install --upgrade pip && \
+    python3 -m pip install --upgrade Pillow
 
 
 RUN rm -rf /usr/local/cuda/include/CL
@@ -139,7 +141,7 @@ ENV ORT_ROOT=/home/onnxruntime
 ADD . ${ORT_ROOT}
 
 ARG BUILD_TYPE="Release"
-  
+
 RUN cd ${ORT_ROOT} && \
     git apply /home/patches/ort_sycl_cuda.patch && \
     /bin/bash ./build.sh \
@@ -191,7 +193,34 @@ RUN cd /home/networks/models && \
     wget -nv https://github.com/onnx/models/raw/main/vision/classification/vgg/model/vgg16-12.onnx && \
     wget -nv https://github.com/onnx/models/raw/main/vision/classification/resnet/model/resnet50-v1-12.onnx
 
-RUN cd ${DEMO_ROOT} && mkdir buildCUDA && cd buildCUDA && \
-    cmake ../ -GNinja -DONNX_RUNTIME_ROOT=${ORT_NCHW_ROOT} \
-	-DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=${BUILD_TYPE} && \
-    cmake --build .
+
+# Build Demo for SYCL DNN (VGG) 
+ENV CXX=${SYCL_ROOT_DIR}/bin/clang++
+ENV CC=${SYCL_ROOT_DIR}/bin/clang
+
+# Getting VGG16 weights
+RUN mkdir ${SYCL_DNN_ROOT}/vgg_weights && cd ${SYCL_DNN_ROOT}/vgg_weights && \
+    wget --no-verbose https://storage.googleapis.com/tensorflow/keras-applications/vgg16/vgg16_weights_tf_dim_ordering_tf_kernels.h5 && \
+    python3 ${SYCL_DNN_ROOT}/samples/networks/vgg/h5toBin.py vgg16_weights_tf_dim_ordering_tf_kernels.h5 && \
+    rm vgg16_weights_tf_dim_ordering_tf_kernels.h5 
+
+# Getting sample image to bin format 
+RUN python3 ${SYCL_DNN_ROOT}/samples/networks/img2bin.py /home/imagenet-examples/10.jpg
+
+RUN cd ${SYCL_DNN_ROOT} && \
+    mkdir buildVGG && cd buildVGG && \
+    cmake ../ -GNinja  \
+    -DCMAKE_EXE_LINKER_FLAGS="-Wl,--enable-new-dtags -lstdc++ \ 
+    -fsycl -ldl" -DCMAKE_CXX_FLAGS="-DTARGET=NVIDIA_GPU" -DSNN_DPCPP=ON \ 
+    -DCMAKE_BUILD_TYPE="Release" -DSNN_DOWNLOAD_SYCLBLAS=OFF \ 
+    -DSNN_BUILD_DOCUMENTATION=OFF -DSNN_BUILD_TESTS=OFF -DSNN_BUILD_BENCHMARKS=OFF \
+    -DSNN_BUILD_SAMPLES=ON -DSNN_BENCH_EIGEN=OFF -DSNN_DOWNLOAD_EIGEN=OFF \
+    -DSNN_INSTALL_TESTS=OFF -DSNN_INSTALL_BENCHMARKS=OFF -DSNN_BENCH_CLBLAST=OFF \
+    -DSNN_BENCH_SNN=OFF -DSNN_BUILD_INTERNAL_BENCHMARKS=OFF -DSNN_TEST_EIGEN=OFF \
+    -DSNN_TEST_SYCLBLAS=ON -DSNN_ENABLE_NCHW=OFF  -DSNN_TEST_SYCLBLAS_MATMULS=OFF \
+    -DSNN_TEST_EIGEN_MATMULS=OFF-DBUILD_SHARED_LIBS=OFF -DSyclBLAS_DIR="${SYCL_BLAS_ROOT}" \
+    -Dsycl_blas_DIR="${SYCL_BLAS_ROOT}/build"  -Dsycl_blas_LIBRARY="${SYCL_BLAS_ROOT}/build/libsycl_blas.so"  \
+    -Dsycl_blas_INCLUDE_DIR="${SYCL_BLAS_ROOT}/include" -Dsycl_blas_SRC_DIR="${SYCL_BLAS_ROOT}/src"  -Wno-dev && \
+    cmake --build . 
+
+RUN cp -r ${SYCL_DNN_ROOT}/buildVGG/samples/networks/vgg /home/networks/

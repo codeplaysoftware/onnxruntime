@@ -334,6 +334,23 @@ index 35d61af..a6c3668 100644
    Backend backend(q);
    auto selector = sycldnn::conv2d::get_default_selector(q.get_device());
    std::vector<DType> output;
+diff --git a/samples/CMakeLists.txt b/samples/CMakeLists.txt
+index 1b36f24..e3bc489 100644
+--- a/samples/CMakeLists.txt
++++ b/samples/CMakeLists.txt
+@@ -15,8 +15,8 @@
+ 
+ include(HandleEigen)
+ 
+-add_subdirectory(conv2d)
+-add_subdirectory(pooling)
+-add_subdirectory(bias)
++#add_subdirectory(conv2d)
++#add_subdirectory(pooling)
++#add_subdirectory(bias)
+ add_subdirectory(networks)
+-add_subdirectory(softmax)
++#add_subdirectory(softmax)
 diff --git a/src/batchnorm/gradient/frozen/kernels.h b/src/batchnorm/gradient/frozen/kernels.h
 index 8c73745..bedc6dc 100644
 --- a/src/batchnorm/gradient/frozen/kernels.h
