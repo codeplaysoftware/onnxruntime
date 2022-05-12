@@ -1,0 +1,226 @@
+# BASE CUDA / CUDNN IMAGE
+FROM nvcr.io/nvidia/cuda:11.4.1-cudnn8-devel-ubuntu18.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies
+ENV CMAKE_URL=https://github.com/Kitware/CMake/releases/download/v3.21.4/cmake-3.21.4-linux-x86_64.tar.gz
+RUN DEBIAN_FRONTEND=noninteractive apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A4B469963BF863CC
+RUN DEBIAN_FRONTEND=noninteractive apt -yq update && apt install -yq --no-install-recommends \
+    ca-certificates \
+    libtinfo5 \
+    wget \
+    g++ \
+    gcc \
+    git \
+    cpio \
+    ninja-build \
+    python3 \
+    libpython3.6-dev \
+    python3-pip \
+    python3-dev \
+    python3-setuptools \
+    clinfo \
+    libboost-all-dev \
+    software-properties-common \
+    ocl-icd-opencl-dev \
+    ocl-icd-dev \
+    opencl-headers && \
+    wget --no-verbose ${CMAKE_URL} -O /tmp/cmake.tar.gz && \
+    tar -zxf /tmp/cmake.tar.gz --strip=1 -C /usr --wildcards cmake*/bin/cmake cmake*/bin/ctest cmake*/share/cmake*/Modules cmake*/share/cmake*/Templates 
+RUN apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* 
+RUN pip3 install flatbuffers numpy h5py
+RUN python3 -m pip install --upgrade pip && \
+    python3 -m pip install --upgrade Pillow
+
+
+RUN rm -rf /usr/local/cuda/include/CL
+
+# Set environment variables for CUDA
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64/:${LD_LIBRARY_PATH}
+ENV CUDA_ROOT=/usr/local/cuda
+
+# Setup environment variables for SYCL-DPCPP
+RUN mkdir /usr/local/dpcpp-cuda /tmp/dpcpp /tmp/dpcppBuild
+
+ENV LD_LIBRARY_PATH=${SYCL_ROOT_DIR}/lib:${LD_LIBRARY_PATH}
+ENV PATH=${SYCL_ROOT_DIR}/bin:${PATH}
+
+ENV SYCL_ROOT_DIR=/usr/local/dpcpp-cuda
+
+ENV DPCPP_PATH="/tmp/dpcpp"
+ENV DPCPP_BUILD_PATH="/tmp/dpcppBuild"
+
+ENV DPCPP_URL="https://github.com/intel/llvm"
+ENV DPCPP_TAG="sycl-nightly/20220401"
+
+ENV CXX=/usr/bin/g++
+ENV CC=/usr/bin/gcc
+
+# Clone, configure, build & install DPCPP with CUDA backend
+RUN git clone -b ${DPCPP_TAG} ${DPCPP_URL} ${DPCPP_PATH}
+
+RUN CUDA_LIB_PATH=$CUDA_ROOT/lib64/stubs \
+    python3 ${DPCPP_PATH}/buildbot/configure.py --cuda -t Release --cmake-gen Ninja \
+    -o ${DPCPP_BUILD_PATH}
+
+RUN cd ${DPCPP_BUILD_PATH} &&\
+    ninja sycl-toolchain &&\
+    ninja
+
+RUN cd ${DPCPP_BUILD_PATH} &&\
+    cmake -DCMAKE_INSTALL_PREFIX=${SYCL_ROOT_DIR} -P cmake_install.cmake
+
+RUN rm -rf DPCPP_PATH
+RUN rm -rf DPCPP_BUILD_PATH
+
+# Prepare SYCL BLAS & DNN Builds
+
+ENV CXX=${SYCL_ROOT_DIR}/bin/clang++
+ENV CC=${SYCL_ROOT_DIR}/bin/clang
+
+RUN ln -s /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/local/cuda/lib64/stubs/libcuda.so.1
+RUN ln -s /usr/local/cuda/lib64/stubs/libnvidia-ml.so /usr/local/cuda/lib64/stubs/libnvidia-ml.so.1
+
+RUN mkdir /home/patches
+ADD patches /home/patches/
+
+# Build SYCL-BLAS
+ENV SYCL_BLAS_ROOT=/tmp/sycl-blas
+
+ARG SYCLBLAS_COMMIT="927113928e8bfa509bc42935a29ae767239d31fe"
+ARG SYCLBLAS_URL="https://github.com/codeplaysoftware/sycl-blas.git"
+
+RUN git clone --recursive ${SYCLBLAS_URL} ${SYCL_BLAS_ROOT} && \
+    cd ${SYCL_BLAS_ROOT} && \
+    if [ ! -z "${SYCLBLAS_COMMIT}" ]; then git checkout ${SYCLBLAS_COMMIT} && git show -s --format='%h %s'; fi && \
+    git apply /home/patches/sycl_blas.patch && git apply /home/patches/sycl_blas_target.patch 
+RUN cd ${SYCL_BLAS_ROOT} && mkdir -p build && cd build && \
+    cmake ../ -GNinja -DSYCL_COMPILER=dpcpp \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DTARGET=NVIDIA_GPU \
+        -DBLAS_ENABLE_CONST_INPUT=ON \
+        -DBLAS_ENABLE_TESTING=OFF \
+        -DBLAS_ENABLE_BENCHMARK=OFF \
+        -DBLAS_BUILD_SAMPLES=OFF \
+        -Wno-dev && \
+    cmake --build .
+
+# Build SYCL-DNN
+
+ARG SYCLDNN_BRANCH="master"
+ARG SYCLDNN_COMMIT="97e973a6041fcda3529b19b18515f9080ff4edbd"
+ARG SYCLDNN_URL="https://github.com/codeplaysoftware/SYCL-DNN.git"
+
+ENV SYCL_DNN_ROOT=/tmp/sycl-dnn
+RUN git clone --recursive -b ${SYCLDNN_BRANCH} ${SYCLDNN_URL} ${SYCL_DNN_ROOT} && \
+    cd ${SYCL_DNN_ROOT} && \
+    if [ ! -z "${SYCLDNN_COMMIT}" ]; then git checkout ${SYCLDNN_COMMIT} && git show -s --format='%h %s'; fi && \
+    git apply /home/patches/sycl_dnn.patch && git apply /home/patches/sycl_dnn_target.patch
+RUN cd ${SYCL_DNN_ROOT} && mkdir -p build && cd build && \
+    cmake ../ -GNinja  \
+        -DCMAKE_INSTALL_PREFIX=${SYCL_DNN_ROOT}/build/install \
+        -DCMAKE_EXE_LINKER_FLAGS="-Wl,--enable-new-dtags -lstdc++ \
+        -fsycl -ldl" -DCMAKE_CXX_FLAGS="-DTARGET=NVIDIA_GPU" -DSNN_DPCPP=ON -DCMAKE_BUILD_TYPE="Release" \
+        -DSNN_DOWNLOAD_SYCLBLAS=OFF -DSNN_BUILD_DOCUMENTATION=OFF -DSNN_BUILD_TESTS=OFF \
+        -DSNN_BUILD_BENCHMARKS=OFF -DSNN_BUILD_SAMPLES=OFF -DSNN_BENCH_EIGEN=OFF -DSNN_DOWNLOAD_EIGEN=OFF \
+        -DSNN_INSTALL_TESTS=OFF -DSNN_INSTALL_BENCHMARKS=OFF -DSNN_BENCH_CLBLAST=OFF -DSNN_BENCH_SNN=OFF \
+        -DSNN_BUILD_INTERNAL_BENCHMARKS=OFF -DSNN_TEST_EIGEN=OFF -DSNN_TEST_SYCLBLAS=ON -DSNN_ENABLE_NCHW=OFF \
+        -DSNN_TEST_SYCLBLAS_MATMULS=OFF -DSNN_TEST_EIGEN_MATMULS=OFF-DBUILD_SHARED_LIBS=OFF \
+        -DSyclBLAS_DIR="${SYCL_BLAS_ROOT}" -Dsycl_blas_DIR="${SYCL_BLAS_ROOT}/build" \
+        -Dsycl_blas_LIBRARY="${SYCL_BLAS_ROOT}/build/libsycl_blas.so" \
+        -Dsycl_blas_INCLUDE_DIR="${SYCL_BLAS_ROOT}/include" \
+        -Dsycl_blas_SRC_DIR="${SYCL_BLAS_ROOT}/src" \
+        -Wno-dev && \
+    cmake --build . && cmake --install .
+
+# Build ONNXRuntime with SYCL EP (NHWC Branch)
+RUN mkdir /home/onnxruntime
+ENV ORT_ROOT=/home/onnxruntime
+
+ADD . ${ORT_ROOT}
+
+ARG BUILD_TYPE="Release"
+
+RUN cd ${ORT_ROOT} && \
+    git apply /home/patches/ort_sycl_cuda.patch && \
+    /bin/bash ./build.sh \
+    --use_sycl_nhwc --build_shared_lib \
+    --syclblas_home=${SYCL_BLAS_ROOT} \
+    --sycldnn_home=${SYCL_DNN_ROOT}/build/install \
+    --config ${BUILD_TYPE} \
+    --parallel --skip_tests --build \
+    --update --skip_submodule_sync \
+    --cmake_extra_defines SYCLDNN_DIR=${SYCL_DNN_ROOT}/build/install/lib/sycldnn/cmake
+
+# Build Demo for SYCL EP
+ENV LD_LIBRARY_PATH=${SYCL_ROOT_DIR}/lib:${LD_LIBRARY_PATH}
+ENV PATH=${SYCL_ROOT_DIR}/bin:${PATH}
+
+RUN mkdir /home/networks && mkdir /home/imagenet-examples && mkdir /home/networks/models
+ADD networks /home/networks/
+ADD imagenet_examples /home/imagenet-examples/
+
+RUN cd /home/networks/models && \
+    wget https://github.com/sgeor255/onnx-models/raw/main/vgg16_nhwc.onnx && \
+    wget https://github.com/sgeor255/onnx-models/raw/main/resnet_nhwc.onnx
+ENV DEMO_ROOT=/home/networks
+RUN cd ${DEMO_ROOT} && mkdir buildSYCL && cd buildSYCL && \
+    cmake ../ -GNinja -DONNX_RUNTIME_ROOT=${ORT_ROOT} \
+	-DUSE_SYCL=ON -DCMAKE_BUILD_TYPE=${BUILD_TYPE} && \
+    cmake --build .
+
+# Get & Build Onnxruntime with CUDA EP 
+
+ENV CXX=/usr/bin/g++
+ENV CC=/usr/bin/gcc 
+
+ARG ORT_URL="https://github.com/codeplaysoftware/onnxruntime"
+ENV ORT_NCHW_ROOT=/home/onnxruntimeNCHW
+ARG ORT_NCHW_BRANCH="sycl_nchw"
+
+RUN git clone --recursive -b ${ORT_NCHW_BRANCH} ${ORT_URL} ${ORT_NCHW_ROOT} 
+
+RUN cd ${ORT_NCHW_ROOT} && git checkout ${ORT_NCHW_BRANCH} && git pull --recurse-submodules && \
+    /bin/bash ./build.sh --skip_submodule_sync \
+    --cuda_home /usr/local/cuda --cudnn_home /usr/lib/x86_64-linux-gnu/ --build_shared_lib \
+    --use_cuda --config ${BUILD_TYPE} --update --build --parallel \
+    --cmake_extra_defines ONNXRUNTIME_VERSION=$(cat ./VERSION_NUMBER) 'CMAKE_CUDA_ARCHITECTURES=60;70;75;80'
+
+# Build Demo for CUDA EP
+
+RUN cd /home/networks/models && \
+    wget -nv https://github.com/onnx/models/raw/main/vision/classification/vgg/model/vgg16-12.onnx && \
+    wget -nv https://github.com/onnx/models/raw/main/vision/classification/resnet/model/resnet50-v1-12.onnx
+
+
+# Build Demo for SYCL DNN (VGG) 
+ENV CXX=${SYCL_ROOT_DIR}/bin/clang++
+ENV CC=${SYCL_ROOT_DIR}/bin/clang
+
+# Getting VGG16 weights
+RUN mkdir ${SYCL_DNN_ROOT}/vgg_weights && cd ${SYCL_DNN_ROOT}/vgg_weights && \
+    wget --no-verbose https://storage.googleapis.com/tensorflow/keras-applications/vgg16/vgg16_weights_tf_dim_ordering_tf_kernels.h5 && \
+    python3 ${SYCL_DNN_ROOT}/samples/networks/vgg/h5toBin.py vgg16_weights_tf_dim_ordering_tf_kernels.h5 && \
+    rm vgg16_weights_tf_dim_ordering_tf_kernels.h5 
+
+# Getting sample image to bin format 
+RUN python3 ${SYCL_DNN_ROOT}/samples/networks/img2bin.py /home/imagenet-examples/10.jpg
+
+RUN cd ${SYCL_DNN_ROOT} && \
+    mkdir buildVGG && cd buildVGG && \
+    cmake ../ -GNinja  \
+    -DCMAKE_EXE_LINKER_FLAGS="-Wl,--enable-new-dtags -lstdc++ \ 
+    -fsycl -ldl" -DCMAKE_CXX_FLAGS="-DTARGET=NVIDIA_GPU" -DSNN_DPCPP=ON \ 
+    -DCMAKE_BUILD_TYPE="Release" -DSNN_DOWNLOAD_SYCLBLAS=OFF \ 
+    -DSNN_BUILD_DOCUMENTATION=OFF -DSNN_BUILD_TESTS=OFF -DSNN_BUILD_BENCHMARKS=OFF \
+    -DSNN_BUILD_SAMPLES=ON -DSNN_BENCH_EIGEN=OFF -DSNN_DOWNLOAD_EIGEN=OFF \
+    -DSNN_INSTALL_TESTS=OFF -DSNN_INSTALL_BENCHMARKS=OFF -DSNN_BENCH_CLBLAST=OFF \
+    -DSNN_BENCH_SNN=OFF -DSNN_BUILD_INTERNAL_BENCHMARKS=OFF -DSNN_TEST_EIGEN=OFF \
+    -DSNN_TEST_SYCLBLAS=ON -DSNN_ENABLE_NCHW=OFF  -DSNN_TEST_SYCLBLAS_MATMULS=OFF \
+    -DSNN_TEST_EIGEN_MATMULS=OFF-DBUILD_SHARED_LIBS=OFF -DSyclBLAS_DIR="${SYCL_BLAS_ROOT}" \
+    -Dsycl_blas_DIR="${SYCL_BLAS_ROOT}/build"  -Dsycl_blas_LIBRARY="${SYCL_BLAS_ROOT}/build/libsycl_blas.so"  \
+    -Dsycl_blas_INCLUDE_DIR="${SYCL_BLAS_ROOT}/include" -Dsycl_blas_SRC_DIR="${SYCL_BLAS_ROOT}/src"  -Wno-dev && \
+    cmake --build . 
+
+RUN cp -r ${SYCL_DNN_ROOT}/buildVGG/samples/networks/vgg /home/networks/

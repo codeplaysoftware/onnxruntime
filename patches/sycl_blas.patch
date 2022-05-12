@@ -1,0 +1,271 @@
+diff --git a/.gitignore b/.gitignore
+index 353819b..8a2df22 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -96,3 +96,5 @@ api_doc/
+ #Visual Studio files
+ .vs/
+ CMakeSettings.json
++
++build-tests-enabled
+\ No newline at end of file
+diff --git a/cmake/CmakeFunctionHelper.cmake b/cmake/CmakeFunctionHelper.cmake
+index e8d9d99..cc8c064 100644
+--- a/cmake/CmakeFunctionHelper.cmake
++++ b/cmake/CmakeFunctionHelper.cmake
+@@ -1,3 +1,4 @@
++
+ #/***************************************************************************
+ # *
+ # *  @license
+@@ -476,59 +477,59 @@ if(${TARGET} STREQUAL "INTEL_GPU")
+     "half"
+   )
+   foreach(data ${supported_types})
+-    add_gemm_configuration(
+-      "${data}" 64 "true" "false" "false"
+-      64 4 4 8 8 1 1 1 1 1 1 "local" "standard" "full" 4 "strided")
+-    add_gemm_configuration(
+-      "${data}" 64 "false" "false" "false"
+-      64 8 8 8 8 1 1 1 1 1 1 "local" "standard" "full" 4 "strided")
+-    add_gemm_configuration(
+-      "${data}" 64 "false" "false" "false"
+-      64 8 8 8 8 1 1 1 1 1 1 "no_local" "standard" "partial" 4 "strided")
+-
+-    if (${data} STREQUAL "half")
+-      add_gemm_configuration(
+-         "${data}" 16 "true" "false" "false"
+-         64 1 1 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-      add_gemm_configuration(
++   add_gemm_configuration(
++     "${data}" 64 "true" "false" "false"
++     64 4 4 8 8 1 1 1 1 1 1 "local" "standard" "full" 4 "strided")
++   add_gemm_configuration(
++     "${data}" 64 "false" "true" "true"
++     64 2 2 8 8 1 1 1 1 1 1 "local" "standard" "full" 1 "strided")
++   add_gemm_configuration(
++     "${data}" 64 "false" "false" "false"
++     64 8 8 8 8 1 1 1 1 1 1 "no_local" "standard" "partial" 4 "strided")
++
++   if (${data} STREQUAL "half")
++     add_gemm_configuration(
+         "${data}" 16 "true" "false" "false"
+-         64 2 2 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-    else()
+-      add_gemm_configuration(
+-         "${data}" 16 "true" "false" "false"
+-         64 1 1 4 4 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-      add_gemm_configuration(
++        64 1 1 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++     add_gemm_configuration(
++       "${data}" 16 "true" "false" "false"
++        64 2 2 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++   else()
++     add_gemm_configuration(
+         "${data}" 16 "true" "false" "false"
+-         64 2 2 4 4 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-    endif()
+-
+-    add_gemm_configuration(
+-      "${data}" 64 "true" "true" "true"
+-      64 2 2 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-    add_gemm_configuration(
+-      "${data}" 64 "true" "true" "true"
+-      64 4 4 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-
+-    if (${data} STREQUAL "double")
+-      add_gemm_configuration(
+-        "${data}" 256 "true" "true" "true"
+-        64 4 4 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-    else()
+-      add_gemm_configuration(
+-        "${data}" 256 "true" "true" "true"
+-        64 4 4 16 16 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-    endif()
+-
+-    add_gemm_configuration(
+-      "${data}" 32 "true" "true" "true"
+-      64 2 1 8 4 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-    add_gemm_configuration(
+-      "${data}" 32 "true" "true" "true"
+-      64 2 2 8 4 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
+-
+-    add_gemm_configuration(
+-      "${data}" 64 "false" "false" "false"
+-      64 4 4 4 4 1 1 1 1 4 4 "no_local" "standard" "full" 4 "interleaved")
++        64 1 1 4 4 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++     add_gemm_configuration(
++       "${data}" 16 "true" "false" "false"
++        64 2 2 4 4 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++   endif()
++
++   add_gemm_configuration(
++     "${data}" 64 "true" "true" "true"
++     64 2 2 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++   add_gemm_configuration(
++     "${data}" 64 "true" "true" "true"
++     64 4 4 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++
++   if (${data} STREQUAL "double")
++     add_gemm_configuration(
++       "${data}" 256 "true" "true" "true"
++       64 4 4 8 8 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++   else()
++     add_gemm_configuration(
++       "${data}" 256 "true" "true" "true"
++       64 4 4 16 16 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++   endif()
++
++   add_gemm_configuration(
++     "${data}" 32 "true" "true" "true"
++     64 2 1 8 4 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++   add_gemm_configuration(
++     "${data}" 32 "true" "true" "true"
++     64 2 2 8 4 1 1 1 1 1 1 "local" "tall_skinny" "none" 4 "strided")
++
++   add_gemm_configuration(
++     "${data}" 64 "false" "false" "false"
++     64 4 4 4 4 1 1 1 1 4 4 "no_local" "standard" "full" 4 "interleaved")
+   endforeach()
+ elseif(${TARGET} STREQUAL "RCAR") # need investigation
+   set(supported_types
+@@ -681,14 +682,8 @@ elseif(${TARGET} STREQUAL "NVIDIA_GPU")
+   )
+   foreach(data ${supported_types})
+     add_gemm_configuration(
+-        "${data}" 128 "false" "false" "true"
+-        128 2 2 8 8 1 1 1 1 1 1 "local" "standard" "full" 1 "strided")
+-    add_gemm_configuration(
+-        "${data}"  64 "false" "false" "true"
+-        64 8 8 8 8 1 1 2 2 1 1 "local" "standard" "full" 1 "strided")
+-    add_gemm_configuration(
+-      "${data}" 64 "false" "false" "false"
+-      64 2 2 4 4 1 1 1 1 4 4 "no_local" "standard" "full" 4 "interleaved")
++          "${data}" 64 "true" "false" "true"
++          64 8 8 8 8 1 1 1 1 1 1 "local" "standard" "full" 1 "strided")
+   endforeach()
+ else() # default cpu backend
+   set(supported_types
+diff --git a/src/interface/blas3/backend/nvidia_gpu.hpp b/src/interface/blas3/backend/nvidia_gpu.hpp
+index 7716c4a..f6c7ecf 100644
+--- a/src/interface/blas3/backend/nvidia_gpu.hpp
++++ b/src/interface/blas3/backend/nvidia_gpu.hpp
+@@ -1,30 +1,7 @@
+-/***************************************************************************
+- *
+- *  @license
+- *  Copyright (C) Codeplay Software Limited
+- *  Licensed under the Apache License, Version 2.0 (the "License");
+- *  you may not use this file except in compliance with the License.
+- *  You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- *  For your convenience, a copy of the License has been included in this
+- *  repository.
+- *
+- *  Unless required by applicable law or agreed to in writing, software
+- *  distributed under the License is distributed on an "AS IS" BASIS,
+- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- *  See the License for the specific language governing permissions and
+- *  limitations under the License.
+- *
+- *  SYCL-BLAS: BLAS implementation using SYCL
+- *
+- *  @filename NVIDIA_GPU.hpp
+- *
+- **************************************************************************/
++
+ #ifndef SYCL_BLAS_GEMM_NVIDIA_GPU_BACKEND_HPP
+ #define SYCL_BLAS_GEMM_NVIDIA_GPU_BACKEND_HPP
+-#include "interface/gemm_launcher.h"
++# include "interface/gemm_launcher.h"
+ 
+ namespace blas {
+ namespace gemm {
+@@ -38,48 +15,19 @@ typename executor_t::policy_t::event_t _gemm(
+     container_0_t _a, index_t _lda, container_1_t _b, index_t _ldb,
+     element_t _beta, container_2_t _c, index_t _ldc, index_t batch_size,
+     gemm_batch_type_t batch_type) {
+-  if (batch_type == gemm_batch_type_t::interleaved) {
+-    return blas::Gemm_Launcher<
+-        64, false, false, false, 64, Tile<2, 2, 4, 4, 1, 1, 1, 1, 4, 4>, _t_a,
+-        _t_b, static_cast<int>(gemm_memory_t::no_local),
+-        static_cast<int>(gemm_algorithm_t::standard),
+-        static_cast<int>(gemm_vectorization_t::full), is_beta_zero, 4,
+-        static_cast<int>(
+-            gemm_batch_type_t::interleaved)>::template _select_gemm(ex, _M, _N,
+-                                                                    _K, _alpha,
+-                                                                    _a, _lda,
+-                                                                    _b, _ldb,
+-                                                                    _beta, _c,
+-                                                                    _ldc,
++        return blas::Gemm_Launcher<
++            64, true, false, true, 64, Tile<8, 8, 8, 8>, _t_a, _t_b,
++            static_cast<int>(gemm_memory_t::local),
++            static_cast<int>(gemm_algorithm_t::standard),
++            static_cast<int>(gemm_vectorization_t::full), is_beta_zero, 1,
++            static_cast<int>(
++                gemm_batch_type_t::strided)>::template _select_gemm(ex, _M, _N, _K,
++                                                                    _alpha, _a,
++                                                                    _lda, _b, _ldb,
++                                                                    _beta, _c, _ldc,
+                                                                     batch_size);
+   }
+-  if (_M < 512 && _N < 512 && _K < 512) {
+-    return blas::Gemm_Launcher<
+-        128, false, false, true, 128, Tile<2, 2, 8, 8>, _t_a, _t_b,
+-        static_cast<int>(gemm_memory_t::local),
+-        static_cast<int>(gemm_algorithm_t::standard),
+-        static_cast<int>(gemm_vectorization_t::full), is_beta_zero, 1,
+-        static_cast<int>(
+-            gemm_batch_type_t::strided)>::template _select_gemm(ex, _M, _N, _K,
+-                                                                _alpha, _a,
+-                                                                _lda, _b, _ldb,
+-                                                                _beta, _c, _ldc,
+-                                                                batch_size);
+-  } else {
+-    return blas::Gemm_Launcher<
+-        64, false, false, true, 64, Tile<8, 8, 8, 8,1,1,2,2>, _t_a, _t_b,
+-        static_cast<int>(gemm_memory_t::local),
+-        static_cast<int>(gemm_algorithm_t::standard),
+-        static_cast<int>(gemm_vectorization_t::full), is_beta_zero, 1,
+-        static_cast<int>(
+-            gemm_batch_type_t::strided)>::template _select_gemm(ex, _M, _N, _K,
+-                                                                _alpha, _a,
+-                                                                _lda, _b, _ldb,
+-                                                                _beta, _c, _ldc,
+-                                                                batch_size);
+-  }
+-}
+ }  // namespace backend
+ }  // namespace gemm
+ }  // namespace blas
+-#endif
++# endif
+diff --git a/test/unittest/CMakeLists.txt b/test/unittest/CMakeLists.txt
+index fbff91f..fa1acdc 100644
+--- a/test/unittest/CMakeLists.txt
++++ b/test/unittest/CMakeLists.txt
+@@ -44,10 +44,6 @@ set(SYCL_UNITTEST_SRCS
+   ${SYCLBLAS_UNITTEST}/blas3/blas3_trsm_test.cpp
+ )
+ 
+-if(${BLAS_ENABLE_EXTENSIONS})
+-  list(APPEND SYCL_UNITTEST_SRCS "${SYCLBLAS_UNITTEST}/reduction/reduction_test.cpp")
+-endif()
+-
+ # Temporary disabling the following tests fro Intel DPC++ as currently Intel compiler crashes while running the following tests
+ if(is_computecpp)
+   set(SYCL_UNITTEST_SRCS ${SYCL_UNITTEST_SRCS}
+@@ -65,6 +61,10 @@ if(is_computecpp)
+     # Blas buffer tests
+     ${SYCLBLAS_UNITTEST}/buffers/sycl_buffer_test.cpp
+   )
++
++  if(${BLAS_ENABLE_EXTENSIONS})
++    list(APPEND SYCL_UNITTEST_SRCS "${SYCLBLAS_UNITTEST}/reduction/reduction_test.cpp")
++  endif()
+ endif()
+ 
+ if(GEMM_TALL_SKINNY_SUPPORT)

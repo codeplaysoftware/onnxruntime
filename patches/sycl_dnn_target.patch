@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4afac51..aaa6575 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -142,7 +142,7 @@ if(SNN_TRISYCL)
+ elseif(SNN_DPCPP)
+   set(CMAKE_CXX_STANDARD 17)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__SYCL_DISABLE_NAMESPACE_INLINE__=ON -O3 -Xclang -cl-mad-enable")
+-  set(DPCPP_SYCL_TARGET spir64)
++  set(DPCPP_SYCL_TARGET nvptx64-nvidia-cuda)
+   find_package(DPCPP REQUIRED)
+   get_target_property(DPCPP_INCLUDE_DIRS DPCPP::DPCPP INTERFACE_INCLUDE_DIRECTORIES)
+ else()
